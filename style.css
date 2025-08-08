@@ -1,0 +1,247 @@
+/* ダウンロードボタン */
+.download-btn {
+  background: #3b5998;
+  color: #fff;
+  border: none;
+  border-radius: 5px;
+  padding: 8px 20px;
+  font-size: 1em;
+  font-weight: bold;
+  cursor: pointer;
+  margin-bottom: 8px;
+  transition: background 0.2s;
+}
+.download-btn:hover {
+  background: #294077;
+}
+/* シート情報欄 */
+.sheet-info {
+  margin: 0 0 18px 0;
+  padding: 18px 2vw 10px 2vw;
+  background: #f3f6fa;
+  border-radius: 0;
+  box-shadow: none;
+}
+.sheet-info-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 32px 24px;
+  margin-bottom: 10px;
+  align-items: flex-end;
+}
+.sheet-info label {
+  display: flex;
+  align-items: center;
+  min-width: 120px;
+  font-size: 1.05em;
+  color: #333;
+  margin-right: 0;
+  font-weight: 500;
+}
+.sheet-info input[type="text"],
+.sheet-info input[type="date"] {
+  margin-left: 10px;
+  padding: 6px 14px;
+  border-radius: 5px;
+  border: 1.5px solid #b0c4de;
+  font-size: 1.05em;
+  min-width: 180px;
+  max-width: 320px;
+  background: #fff;
+  transition: border 0.2s;
+}
+.sheet-info input[type="text"]:focus,
+.sheet-info input[type="date"]:focus {
+  border: 2px solid #3b5998;
+  outline: none;
+}
+.sheet-info input[type="text"]::placeholder {
+  color: #b0b0b0;
+  opacity: 1;
+}
+@media (max-width: 700px) {
+  .sheet-info-row {
+    flex-direction: column;
+    gap: 8px 0;
+    align-items: stretch;
+  }
+  .sheet-info label {
+    min-width: 0;
+    font-size: 1em;
+  }
+  .sheet-info input[type="text"],
+  .sheet-info input[type="date"] {
+    min-width: 0;
+    width: 100%;
+    max-width: 100%;
+  }
+}
+
+.sheet-info label {
+  font-size: 1em;
+  color: #333;
+  margin-right: 12px;
+}
+.sheet-info input[type="text"],
+.sheet-info input[type="date"] {
+  margin-left: 6px;
+  padding: 3px 10px;
+  border-radius: 4px;
+  border: 1px solid #b0c4de;
+  font-size: 1em;
+  min-width: 120px;
+}
+.sheet-info input[type="text"]::placeholder {
+  color: #b0b0b0;
+}
+/* スイッチボタン */
+.switch-wrap {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+.switch-btn {
+  background: #e0e7f7;
+  color: #3b5998;
+  border: 1.5px solid #b0c4de;
+  border-radius: 6px 6px 0 0;
+  padding: 7px 22px;
+  font-size: 1.08em;
+  font-weight: bold;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s;
+  outline: none;
+}
+.switch-btn.active,
+.switch-btn:focus {
+  background: #3b5998;
+  color: #fff;
+  border-bottom: 2.5px solid #fff;
+  z-index: 2;
+}
+.switch-btn:not(.active):hover {
+  background: #dbe6fa;
+}
+body {
+  font-family: "Segoe UI", "Meiryo", sans-serif;
+  background: #f7f7fa;
+  margin: 0;
+  padding: 0;
+}
+.container {
+  width: 100vw;
+  min-width: 0;
+  margin: 0;
+  background: #fff;
+  border-radius: 0;
+  box-shadow: none;
+  padding: 0;
+}
+header h1 {
+  text-align: center;
+  margin-bottom: 24px;
+  font-size: 2.2em;
+  letter-spacing: 0.1em;
+}
+.flow-section {
+  margin-bottom: 36px;
+  padding: 0 2vw;
+}
+.flow-columns {
+  display: flex;
+  flex-direction: row-reverse;
+  gap: 12px;
+  justify-content: space-between;
+  width: 100%;
+}
+.flow-col {
+  background: #e9f0fb;
+  border-radius: 8px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
+  flex: 1 1 0;
+  min-width: 0;
+  max-width: none;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  padding: 0 0 12px 0;
+}
+.col-title {
+  background: #3b5998;
+  color: #fff;
+  font-weight: bold;
+  text-align: center;
+  border-radius: 8px 8px 0 0;
+  padding: 8px 0 6px 0;
+  font-size: 1.05em;
+  letter-spacing: 0.05em;
+}
+.col-title span {
+  font-size: 0.85em;
+  font-weight: normal;
+  color: #dbe6fa;
+}
+.flow-content {
+  min-height: 180px;
+  background: #fff;
+  border: 1px dashed #b0c4de;
+  border-radius: 0 0 8px 8px;
+  padding: 10px;
+  font-size: 1em;
+  outline: none;
+  margin-top: 0;
+  transition: border 0.2s;
+}
+.flow-content:focus {
+  border: 2px solid #3b5998;
+  background: #f0f6ff;
+}
+.score-section {
+  margin-top: 32px;
+  padding: 0 2vw;
+}
+.score-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 18px;
+}
+.score-table th,
+.score-table td {
+  border: 1px solid #b0c4de;
+  padding: 8px 10px;
+  text-align: center;
+  font-size: 1em;
+}
+.score-table th {
+  background: #e0e7f7;
+  font-weight: bold;
+}
+.judge-info {
+  display: flex;
+  gap: 24px;
+  justify-content: flex-end;
+  align-items: center;
+}
+.judge-info label {
+  font-size: 1em;
+  color: #333;
+}
+.judge-info input {
+  margin-left: 6px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  border: 1px solid #b0c4de;
+  font-size: 1em;
+}
+@media (max-width: 900px) {
+  .flow-columns {
+    flex-direction: column-reverse;
+    gap: 8px;
+    width: 100%;
+  }
+  .flow-col {
+    max-width: 100%;
+    min-width: 0;
+  }
+}

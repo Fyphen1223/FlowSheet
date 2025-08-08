@@ -308,6 +308,28 @@ document.addEventListener("DOMContentLoaded", () => {
       closeSettings();
       saveAll();
     });
+  // --- ガイドモーダル ---
+  (function setupGuide() {
+    const gOverlay = document.getElementById("guide-overlay");
+    const gOpen = document.getElementById("open-guide-btn");
+    const gClose = document.getElementById("close-guide-btn");
+    const gCloseFooter = document.getElementById("close-guide-btn-footer");
+    function open() {
+      gOverlay?.classList.add("active");
+      gOverlay?.removeAttribute("aria-hidden");
+    }
+    function close() {
+      gOverlay?.classList.remove("active");
+      gOverlay?.setAttribute("aria-hidden", "true");
+    }
+    gOpen && gOpen.addEventListener("click", open);
+    gClose && gClose.addEventListener("click", close);
+    gCloseFooter && gCloseFooter.addEventListener("click", close);
+    gOverlay &&
+      gOverlay.addEventListener("click", (e) => {
+        if (e.target === gOverlay) close();
+      });
+  })();
   // body全体でフォーカスが外れているときのundo/redo
   document.addEventListener("keydown", function (e) {
     const active = document.activeElement;

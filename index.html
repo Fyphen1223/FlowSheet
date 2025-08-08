@@ -126,6 +126,21 @@
           />
         </svg>
       </button>
+      <!-- ガイドボタン（右上固定・設定の左） -->
+      <button id="open-guide-btn" class="help-btn" title="ガイド">
+        <svg
+          width="18"
+          height="18"
+          viewBox="0 0 24 24"
+          xmlns="http://www.w3.org/2000/svg"
+          aria-hidden="true"
+        >
+          <path
+            fill="#3b5998"
+            d="M12 2a10 10 0 1 0 0 20a10 10 0 0 0 0-20m0 15.25a1.25 1.25 0 1 1 0-2.5a1.25 1.25 0 0 1 0 2.5M13.53 7.06c-.39-.39-.92-.61-1.53-.61c-1.2 0-2.2.81-2.2 1.82h1.5c0-.2.31-.32.7-.32c.19 0 .35.05.46.16c.12.12.17.28.17.45c0 .26-.12.39-.49.62c-.64.4-1.14.84-1.14 1.82V12h1.5v-.36c0-.41.12-.55.61-.88c.65-.43 1.02-.9 1.02-1.68c0-.51-.2-.97-.6-1.36Z"
+          />
+        </svg>
+      </button>
 
       <!-- 設定モーダル -->
       <div id="settings-overlay" class="settings-overlay" aria-hidden="true">
@@ -166,6 +181,47 @@
           </div>
           <div class="settings-modal-footer">
             <button id="save-settings-btn" class="download-btn">保存</button>
+          </div>
+        </div>
+      </div>
+      <!-- ガイドモーダル -->
+      <div id="guide-overlay" class="settings-overlay" aria-hidden="true">
+        <div
+          class="settings-modal"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="guide-title"
+          tabindex="-1"
+        >
+          <div class="settings-modal-header">
+            <h2 id="guide-title">ガイド</h2>
+            <button
+              id="close-guide-btn"
+              class="modal-close"
+              aria-label="閉じる"
+            >
+              ×
+            </button>
+          </div>
+          <div class="settings-modal-body">
+            <ul style="margin: 0 0 0 1.2em; padding: 0; line-height: 1.6">
+              <li>
+                ブロック右のドットをドラッグして他ブロックと接続（右クリックで矢印削除）
+              </li>
+              <li>空白にドロップで新規ブロックを作成して接続</li>
+              <li>Alt + ↑↓←→ でブロック間を移動、Ctrl + Enter で下に追加</li>
+              <li>空のブロックで Backspace/Delete で削除</li>
+              <li>タイマー: ▶/⏸、⟲、プリセット、カウントダウン切替あり</li>
+              <li>スコアは数字のみ。マナーは減点、合計は自動計算。</li>
+              <li>フロー保存/読込: .dfsf で全情報をエクスポート/インポート</li>
+              <li>フローをテキストでダウンロード（Aff/Neg 両方まとめ）</li>
+              <li>フローを全削除で矢印も含めて初期化</li>
+            </ul>
+          </div>
+          <div class="settings-modal-footer">
+            <button id="close-guide-btn-footer" class="download-btn">
+              閉じる
+            </button>
           </div>
         </div>
       </div>

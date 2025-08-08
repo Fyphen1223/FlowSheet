@@ -17,6 +17,25 @@
 .settings-btn:hover {
   background: #dbe6fa;
 }
+/* ガイドボタン（設定ボタンの左に固定） */
+.help-btn {
+  position: fixed;
+  top: 10px;
+  right: 52px;
+  width: 36px;
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #e9f0fb;
+  border: 1.5px solid #b0c4de;
+  border-radius: 50%;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+  cursor: pointer;
+}
+.help-btn:hover {
+  background: #dbe6fa;
+}
 
 /* モーダル */
 .settings-overlay {

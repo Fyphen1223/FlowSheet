@@ -14,6 +14,33 @@
           <button id="download-flow-btn" class="download-btn">
             フローをテキストでダウンロード
           </button>
+          <button
+            id="clear-flow-btn"
+            class="download-btn"
+            style="background: #c0392b; margin-left: 8px"
+          >
+            フローを全削除
+          </button>
+          <button
+            id="export-dfsf-btn"
+            class="download-btn"
+            style="margin-left: 8px"
+          >
+            フローを保存(.dfsf)
+          </button>
+          <button
+            id="import-dfsf-btn"
+            class="download-btn"
+            style="margin-left: 8px; background: #16a085"
+          >
+            読み込み(.dfsf)
+          </button>
+          <input
+            id="import-dfsf-input"
+            type="file"
+            accept=".dfsf,application/json"
+            style="display: none"
+          />
         </div>
         <div class="switch-wrap">
           <button id="switch-to-affirmative" class="switch-btn active">
@@ -58,76 +85,255 @@
               class="sheet-team-negative"
               placeholder="否定側チーム名"
           /></label>
+          <div class="timer-wrap" aria-label="スピーチタイマー">
+            <div class="timer-panel">
+              <span id="timer-display" class="timer-display" aria-live="polite"
+                >00:00</span
+              >
+              <button id="timer-start" class="timer-btn" title="開始/一時停止">
+                ▶
+              </button>
+              <button id="timer-reset" class="timer-btn" title="リセット">
+                ⟲
+              </button>
+              <select id="timer-preset" class="timer-select" title="プリセット">
+                <option value="180000">3:00</option>
+                <option value="240000">4:00</option>
+                <option value="300000" selected>6:00</option>
+                <option value="360000">1:00</option>
+                <option value="480000">2:00</option>
+              </select>
+              <label class="timer-toggle">
+                <input type="checkbox" id="timer-countdown" checked />
+                カウントダウン
+              </label>
+            </div>
+          </div>
+        </div>
+      </div>
+      <!-- 設定ボタン（右上固定） -->
+      <button id="open-settings-btn" class="settings-btn" title="設定">
+        <svg
+          width="20"
+          height="20"
+          viewBox="0 0 24 24"
+          xmlns="http://www.w3.org/2000/svg"
+          aria-hidden="true"
+        >
+          <path
+            fill="#3b5998"
+            d="M12 8.5a3.5 3.5 0 1 0 0 7a3.5 3.5 0 0 0 0-7m8.94 2.94l-1.23-.71c.04-.24.06-.49.06-.73s-.02-.5-.06-.74l1.23-.71a.5.5 0 0 0 .18-.68l-1.8-3.12a.5.5 0 0 0-.64-.2l-1.23.5a6.7 6.7 0 0 0-1.26-.73l-.19-1.32a.5.5 0 0 0-.5-.42h-3.6a.5.5 0 0 0-.5.42l-.19 1.32c-.45.19-.87.42-1.26.73l-1.23-.5a.5.5 0 0 0-.64.2l-1.8 3.12a.5.5 0 0 0 .18.68l1.23.71c-.04.24-.06.49-.06.74s.02.49.06.73l-1.23.71a.5.5 0 0 0-.18.68l1.8 3.12a.5.5 0 0 0 .64.2l1.23-.5c.39.31.81.55 1.26.73l.19 1.32a.5.5 0 0 0 .5.42h3.6a.5.5 0 0 0 .5-.42l.19-1.32c.45-.18.87-.42 1.26-.73l1.23.5a.5.5 0 0 0 .64-.2l1.8-3.12a.5.5 0 0 0-.18-.68Z"
+          />
+        </svg>
+      </button>
+
+      <!-- 設定モーダル -->
+      <div id="settings-overlay" class="settings-overlay" aria-hidden="true">
+        <div
+          class="settings-modal"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="settings-title"
+          tabindex="-1"
+        >
+          <div class="settings-modal-header">
+            <h2 id="settings-title">設定</h2>
+            <button
+              id="close-settings-btn"
+              class="modal-close"
+              aria-label="閉じる"
+            >
+              ×
+            </button>
+          </div>
+          <div class="settings-modal-body">
+            <label class="settings-row">
+              <span>フォントサイズ</span>
+              <select id="setting-font-size">
+                <option value="default">標準</option>
+                <option value="large">大</option>
+                <option value="xlarge">特大</option>
+              </select>
+            </label>
+            <label class="settings-row">
+              <span>行間</span>
+              <select id="setting-line-height">
+                <option value="default">標準</option>
+                <option value="relaxed">少し広く</option>
+                <option value="loose">広く</option>
+              </select>
+            </label>
+          </div>
+          <div class="settings-modal-footer">
+            <button id="save-settings-btn" class="download-btn">保存</button>
+          </div>
         </div>
       </div>
       <main>
         <section class="flow-section" id="affirmative-flow">
+          <div class="arrow-svg-layer"></div>
           <div class="flow-columns">
             <div class="flow-col" data-label="2AR">
               <div class="col-title">
                 2AR<br /><span>(肯定側第二反駁)</span>
               </div>
-              <div class="flow-content" contenteditable="true"></div>
+              <div class="flow-blocks">
+                <div class="flow-block" contenteditable="true"></div>
+                <div class="flow-block">
+                  <div class="flow-block-text" contenteditable="true"></div>
+                  <button
+                    class="drag-connect-btn"
+                    title="他ブロックと接続"
+                    draggable="true"
+                    tabindex="-1"
+                    style="
+                      margin-left: 4px;
+                      background: transparent;
+                      border: none;
+                      cursor: grab;
+                      padding: 0;
+                      vertical-align: middle;
+                    "
+                  >
+                    <svg
+                      width="18"
+                      height="18"
+                      viewBox="0 0 18 18"
+                      style="display: block"
+                      xmlns="http://www.w3.org/2000/svg"
+                    >
+                      <circle cx="5" cy="5" r="2" fill="#888" />
+                      <circle cx="13" cy="5" r="2" fill="#888" />
+                      <circle cx="5" cy="13" r="2" fill="#888" />
+                      <circle cx="13" cy="13" r="2" fill="#888" />
+                    </svg>
+                  </button>
+                </div>
+                <div class="flow-block" contenteditable="true">
+                  <button
+                    class="drag-connect-btn"
+                    title="他ブロックと接続"
+                    draggable="true"
+                    tabindex="-1"
+                    style="
+                      margin-left: 4px;
+                      background: transparent;
+                      border: none;
+                      cursor: grab;
+                      padding: 0;
+                      vertical-align: middle;
+                    "
+                  >
+                    <svg
+                      width="18"
+                      height="18"
+                      viewBox="0 0 18 18"
+                      style="display: block"
+                      xmlns="http://www.w3.org/2000/svg"
+                    >
+                      <circle cx="5" cy="5" r="2" fill="#888" />
+                      <circle cx="13" cy="5" r="2" fill="#888" />
+                      <circle cx="5" cy="13" r="2" fill="#888" />
+                      <circle cx="13" cy="13" r="2" fill="#888" />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+              <button class="add-block-btn" type="button">＋ 論点追加</button>
             </div>
             <div class="flow-col" data-label="2NR">
               <div class="col-title">
                 2NR<br /><span>(否定側第二反駁)</span>
               </div>
-              <div class="flow-content" contenteditable="true"></div>
+              <div class="flow-blocks">
+                <div class="flow-block" contenteditable="true"></div>
+              </div>
+              <button class="add-block-btn" type="button">＋ 論点追加</button>
             </div>
             <div class="flow-col" data-label="1AR">
               <div class="col-title">
                 1AR<br /><span>(肯定側第一反駁)</span>
               </div>
-              <div class="flow-content" contenteditable="true"></div>
+              <div class="flow-blocks">
+                <div class="flow-block" contenteditable="true"></div>
+              </div>
+              <button class="add-block-btn" type="button">＋ 論点追加</button>
             </div>
             <div class="flow-col" data-label="1NR">
               <div class="col-title">
                 1NR<br /><span>(否定側第一反駁)</span>
               </div>
-              <div class="flow-content" contenteditable="true"></div>
+              <div class="flow-blocks">
+                <div class="flow-block" contenteditable="true"></div>
+              </div>
+              <button class="add-block-btn" type="button">＋ 論点追加</button>
             </div>
             <div class="flow-col" data-label="NQ">
               <div class="col-title">NQ<br /><span>(否定側質疑)</span></div>
-              <div class="flow-content" contenteditable="true"></div>
+              <div class="flow-blocks">
+                <div class="flow-block" contenteditable="true"></div>
+              </div>
+              <button class="add-block-btn" type="button">＋ 論点追加</button>
             </div>
             <div class="flow-col" data-label="AC">
               <div class="col-title">AC<br /><span>(肯定側立論)</span></div>
-              <div class="flow-content" contenteditable="true"></div>
+              <div class="flow-blocks">
+                <div class="flow-block" contenteditable="true"></div>
+              </div>
+              <button class="add-block-btn" type="button">＋ 論点追加</button>
             </div>
           </div>
         </section>
         <section class="flow-section" id="negative-flow" style="display: none">
+          <div class="arrow-svg-layer"></div>
           <div class="flow-columns">
             <div class="flow-col" data-label="C">
               <div class="col-title">C<br /><span>(比較・総括)</span></div>
-              <div class="flow-content" contenteditable="true"></div>
+              <div class="flow-blocks">
+                <div class="flow-block" contenteditable="true"></div>
+              </div>
+              <button class="add-block-btn" type="button">＋ 論点追加</button>
             </div>
             <div class="flow-col" data-label="2AR">
               <div class="col-title">
                 2AR<br /><span>(肯定側第二反駁)</span>
               </div>
-              <div class="flow-content" contenteditable="true"></div>
+              <div class="flow-blocks">
+                <div class="flow-block" contenteditable="true"></div>
+              </div>
+              <button class="add-block-btn" type="button">＋ 論点追加</button>
             </div>
             <div class="flow-col" data-label="2NR">
               <div class="col-title">
                 2NR<br /><span>(否定側第二反駁)</span>
               </div>
-              <div class="flow-content" contenteditable="true"></div>
+              <div class="flow-blocks">
+                <div class="flow-block" contenteditable="true"></div>
+              </div>
+              <button class="add-block-btn" type="button">＋ 論点追加</button>
             </div>
             <div class="flow-col" data-label="1AR">
               <div class="col-title">
                 1AR<br /><span>(肯定側第一反駁)</span>
               </div>
-              <div class="flow-content" contenteditable="true"></div>
+              <div class="flow-blocks">
+                <div class="flow-block" contenteditable="true"></div>
+              </div>
+              <button class="add-block-btn" type="button">＋ 論点追加</button>
             </div>
             <div class="flow-col" data-label="AQ">
               <div class="col-title">AQ<br /><span>(肯定側質疑)</span></div>
-              <div class="flow-content" contenteditable="true"></div>
+              <div class="flow-blocks">
+                <div class="flow-block" contenteditable="true"></div>
+              </div>
+              <button class="add-block-btn" type="button">＋ 論点追加</button>
             </div>
             <div class="flow-col" data-label="NC">
               <div class="col-title">NC<br /><span>(否定側立論)</span></div>
-              <div class="flow-content" contenteditable="true"></div>
+              <div class="flow-blocks">
+                <div class="flow-block" contenteditable="true"></div>
+              </div>
+              <button class="add-block-btn" type="button">＋ 論点追加</button>
             </div>
           </div>
         </section>
@@ -135,7 +341,7 @@
           <table class="score-table">
             <thead>
               <tr>
-                <th>項目</th>
+                <th>役割</th>
                 <th>肯定側</th>
                 <th>否定側</th>
               </tr>
@@ -152,12 +358,22 @@
                 <td contenteditable="true"></td>
               </tr>
               <tr>
-                <td>反駁</td>
+                <td>応答</td>
                 <td contenteditable="true"></td>
                 <td contenteditable="true"></td>
               </tr>
               <tr>
-                <td>態度・技術</td>
+                <td>第一反駁</td>
+                <td contenteditable="true"></td>
+                <td contenteditable="true"></td>
+              </tr>
+              <tr>
+                <td>第二反駁</td>
+                <td contenteditable="true"></td>
+                <td contenteditable="true"></td>
+              </tr>
+              <tr>
+                <td>マナー</td>
                 <td contenteditable="true"></td>
                 <td contenteditable="true"></td>
               </tr>
@@ -167,17 +383,12 @@
                 <td contenteditable="true"></td>
               </tr>
               <tr>
-                <td>判定</td>
+                <td>勝敗</td>
                 <td contenteditable="true"></td>
                 <td contenteditable="true"></td>
               </tr>
             </tbody>
           </table>
-          <div class="judge-info">
-            <label>審判名：<input type="text" class="judge-name" /></label>
-            <label>日付：<input type="date" class="date" /></label>
-            <label>時間：<input type="time" class="time" /></label>
-          </div>
         </section>
       </main>
     </div>

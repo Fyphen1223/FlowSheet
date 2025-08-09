@@ -5,10 +5,30 @@
 // ここでは最低限の初期化のみ
 
 document.addEventListener("DOMContentLoaded", () => {
+  // PWA: Service Worker registration
+  if ("serviceWorker" in navigator) {
+    window.addEventListener("load", () => {
+      navigator.serviceWorker.register("./service-worker.js").catch(() => {});
+    });
+  }
   // localStorage keys
   const STORAGE_KEY = "flowsheet-autosave-v1";
   const SETTINGS_KEY = "flowsheet-settings-v1";
+  const THEME_KEY = SETTINGS_KEY; // 同一オブジェクトで管理（fontSize, lineHeight, theme）
   // 共通: flow-blockテンプレ生成
+  function createReorderButton() {
+    const btn = document.createElement("button");
+    btn.className = "drag-reorder-btn";
+    btn.title = "順序を入れ替え";
+    btn.setAttribute("tabindex", "-1");
+    btn.innerHTML = `
+      <svg width="16" height="16" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+        <rect x="3" y="4" width="10" height="2" rx="1" fill="#888"/>
+        <rect x="3" y="9" width="10" height="2" rx="1" fill="#888"/>
+        <rect x="3" y="14" width="10" height="2" rx="1" fill="#888"/>
+      </svg>`;
+    return btn;
+  }
   function createDragButton() {
     const btn = document.createElement("button");
     btn.className = "drag-connect-btn";
@@ -36,8 +56,11 @@ document.addEventListener("DOMContentLoaded", () => {
     text.className = "flow-block-text";
     text.contentEditable = "true";
     text.innerHTML = contentHtml;
+    const reorderBtn = createReorderButton();
+    reorderBtn.addEventListener("mousedown", onReorderHandleDown);
     const btn = createDragButton();
     btn.addEventListener("mousedown", onConnectHandleDown);
+    b.appendChild(reorderBtn);
     b.appendChild(text);
     b.appendChild(btn);
     // 既存の設定を適用
@@ -68,10 +91,20 @@ document.addEventListener("DOMContentLoaded", () => {
         text.className = "flow-block-text";
         text.contentEditable = "true";
         text.innerHTML = html;
+        const reorderBtn = createReorderButton();
+        reorderBtn.addEventListener("mousedown", onReorderHandleDown);
         const btn = createDragButton();
         btn.addEventListener("mousedown", onConnectHandleDown);
+        b.appendChild(reorderBtn);
         b.appendChild(text);
         b.appendChild(btn);
+      }
+      // 既存に並べ替えボタンが無い場合は付与
+      if (!b.querySelector(".drag-reorder-btn")) {
+        const reorderBtn = createReorderButton();
+        reorderBtn.addEventListener("mousedown", onReorderHandleDown);
+        const first = b.firstChild;
+        b.insertBefore(reorderBtn, first);
       }
     });
   }
@@ -237,6 +270,16 @@ document.addEventListener("DOMContentLoaded", () => {
   // 古いDOMを新テンプレへ
   upgradeExistingBlocks();
   // 設定の適用
+  function applyTheme(theme) {
+    const root = document.documentElement;
+    const preferDark =
+      window.matchMedia &&
+      window.matchMedia("(prefers-color-scheme: dark)").matches;
+    const mode =
+      theme && theme !== "system" ? theme : preferDark ? "dark" : "light";
+    if (mode === "dark") root.classList.add("dark");
+    else root.classList.remove("dark");
+  }
   try {
     const s = JSON.parse(localStorage.getItem(SETTINGS_KEY) || "null");
     if (s && typeof s === "object") {
@@ -248,8 +291,13 @@ document.addEventListener("DOMContentLoaded", () => {
         else if (s.lineHeight === "relaxed") el.style.lineHeight = "1.6";
         else el.style.lineHeight = "";
       });
+      applyTheme(s.theme || "system");
+    } else {
+      applyTheme("system");
     }
-  } catch {}
+  } catch {
+    applyTheme("system");
+  }
 
   // --- 設定モーダル ---
   const overlay = document.getElementById("settings-overlay");
@@ -258,6 +306,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const saveBtn = document.getElementById("save-settings-btn");
   const selFont = document.getElementById("setting-font-size");
   const selLine = document.getElementById("setting-line-height");
+  const selTheme = document.getElementById("setting-theme");
 
   function openSettings() {
     overlay.classList.add("active");
@@ -267,13 +316,16 @@ document.addEventListener("DOMContentLoaded", () => {
       if (s && typeof s === "object") {
         selFont.value = s.fontSize || "default";
         selLine.value = s.lineHeight || "default";
+        if (selTheme) selTheme.value = s.theme || "system";
       } else {
         selFont.value = "default";
         selLine.value = "default";
+        if (selTheme) selTheme.value = "system";
       }
     } catch {
       selFont.value = "default";
       selLine.value = "default";
+      if (selTheme) selTheme.value = "system";
     }
   }
   function closeSettings() {
@@ -283,6 +335,7 @@ document.addEventListener("DOMContentLoaded", () => {
   function applySettings() {
     const fontChoice = selFont.value;
     const lineChoice = selLine.value;
+    const themeChoice = selTheme ? selTheme.value : "system";
     document.querySelectorAll(".flow-block-text").forEach((el) => {
       if (fontChoice === "xlarge") el.style.fontSize = "18px";
       else if (fontChoice === "large") el.style.fontSize = "16px";
@@ -291,10 +344,16 @@ document.addEventListener("DOMContentLoaded", () => {
       else if (lineChoice === "relaxed") el.style.lineHeight = "1.6";
       else el.style.lineHeight = "";
     });
-    localStorage.setItem(
-      SETTINGS_KEY,
-      JSON.stringify({ fontSize: fontChoice, lineHeight: lineChoice })
-    );
+    const current =
+      JSON.parse(localStorage.getItem(SETTINGS_KEY) || "null") || {};
+    const next = {
+      ...current,
+      fontSize: fontChoice,
+      lineHeight: lineChoice,
+      theme: themeChoice,
+    };
+    localStorage.setItem(SETTINGS_KEY, JSON.stringify(next));
+    applyTheme(themeChoice);
   }
   openBtn && openBtn.addEventListener("click", openSettings);
   closeBtn && closeBtn.addEventListener("click", closeSettings);
@@ -329,6 +388,33 @@ document.addEventListener("DOMContentLoaded", () => {
       gOverlay.addEventListener("click", (e) => {
         if (e.target === gOverlay) close();
       });
+  })();
+  // テーマトグルボタン
+  (function setupThemeToggle() {
+    const btn = document.getElementById("toggle-theme-btn");
+    if (!btn) return;
+    btn.addEventListener("click", () => {
+      const s = JSON.parse(localStorage.getItem(SETTINGS_KEY) || "null") || {};
+      const current = s.theme || "system";
+      // system -> dark -> light -> system の順で切替
+      const order = ["system", "dark", "light"];
+      const idx = order.indexOf(current);
+      const next = order[(idx + 1) % order.length];
+      s.theme = next;
+      localStorage.setItem(SETTINGS_KEY, JSON.stringify(s));
+      applyTheme(next);
+      // 設定モーダルが開いていたら表示更新
+      if (selTheme) selTheme.value = next;
+    });
+    // OS設定の変化に追従（system選択時）
+    if (window.matchMedia) {
+      const mq = window.matchMedia("(prefers-color-scheme: dark)");
+      mq.addEventListener?.("change", () => {
+        const s =
+          JSON.parse(localStorage.getItem(SETTINGS_KEY) || "null") || {};
+        if (!s.theme || s.theme === "system") applyTheme("system");
+      });
+    }
   })();
   // body全体でフォーカスが外れているときのundo/redo
   document.addEventListener("keydown", function (e) {
@@ -404,9 +490,25 @@ document.addEventListener("DOMContentLoaded", () => {
         e.preventDefault();
         const prev = block.previousElementSibling;
         const next = block.nextElementSibling;
+        // 削除前に接続も消す
+        const section = block.closest(".flow-section");
+        const layer = ensureLayer(section);
+        const bid = block.dataset.blockId;
+        if (bid && layer) {
+          layer
+            .querySelectorAll(`svg[data-from="${bid}"], svg[data-to="${bid}"]`)
+            .forEach((s) => s.remove());
+        }
         block.remove();
         if (prev) prev.querySelector(".flow-block-text")?.focus();
         else if (next) next.querySelector(".flow-block-text")?.focus();
+        // 保存と接続の永続化
+        saveAll();
+        persistConnections();
+        // レイアウト変化に伴う矢印再描画
+        try {
+          scheduleRepaint();
+        } catch {}
       }
     }
   }
@@ -415,25 +517,69 @@ document.addEventListener("DOMContentLoaded", () => {
   });
   // flow-blockでCtrl+Enterで新ブロック追加＆フォーカス
   function onFlowBlockKeydown(e) {
-    if (
-      e.ctrlKey &&
-      e.key === "Enter" &&
-      e.target.classList.contains("flow-block-text")
-    ) {
+    const isFlowText = e.target.classList.contains("flow-block-text");
+    // Ctrl+Enter で同列に新規ブロック
+    if (e.ctrlKey && e.key === "Enter" && isFlowText) {
       e.preventDefault();
       const currentText = e.target;
       const currentBlock = currentText.parentNode;
       const parent = currentBlock.parentNode;
       const newBlock = createFlowBlock("");
-      if (currentBlock.nextSibling) {
+      if (currentBlock.nextSibling)
         parent.insertBefore(newBlock, currentBlock.nextSibling);
-      } else {
-        parent.appendChild(newBlock);
-      }
+      else parent.appendChild(newBlock);
       setTimeout(() => newBlock.querySelector(".flow-block-text")?.focus(), 0);
-      // 新規追加したので保存し、接続再計算
       saveAll();
       persistConnections();
+      try {
+        scheduleRepaint();
+      } catch {}
+      return;
+    }
+    // Alt+Enter で右のロールに新規ブロック＋接続
+    if (e.altKey && e.key === "Enter" && isFlowText) {
+      e.preventDefault();
+      const currentBlock = e.target.closest(".flow-block");
+      const flowCol = currentBlock.closest(".flow-col");
+      const columns = Array.from(flowCol.parentNode.children);
+      const colIdx = columns.indexOf(flowCol);
+      // row-reverseのため、視覚上の右は DOM 上の index-1
+      if (colIdx <= 0) return; // 右がなければ何もしない
+      const rightCol = columns[colIdx - 1];
+      const rightWrap = rightCol.querySelector(".flow-blocks");
+      if (!rightWrap) return;
+      // 位置を合わせて挿入（同じ行インデックスに挿入、なければ末尾）
+      const siblings = Array.from(currentBlock.parentNode.children);
+      const rowIdx = siblings.indexOf(currentBlock);
+      const newBlock = createFlowBlock("");
+      const before = rightWrap.children[rowIdx]
+        ? rightWrap.children[rowIdx]
+        : null;
+      if (before) rightWrap.insertBefore(newBlock, before);
+      else rightWrap.appendChild(newBlock);
+      // 矢印を生成
+      const section = rightCol.closest(".flow-section");
+      const layer = ensureLayer(section);
+      const toCenterX =
+        newBlock.getBoundingClientRect().left +
+        newBlock.getBoundingClientRect().width / 2;
+      const fromCenterX =
+        currentBlock.getBoundingClientRect().left +
+        currentBlock.getBoundingClientRect().width / 2;
+      const sC = getBlockEdgeAnchorInLayer(currentBlock, layer, toCenterX);
+      const eC = getBlockEdgeAnchorInLayer(newBlock, layer, fromCenterX);
+      const svg = makeLineInLayer(layer, sC.x, sC.y, eC.x, eC.y);
+      svg.dataset.from = currentBlock.dataset.blockId;
+      svg.dataset.to = newBlock.dataset.blockId;
+      layer.appendChild(svg);
+      // フォーカスと保存
+      setTimeout(() => newBlock.querySelector(".flow-block-text")?.focus(), 0);
+      saveAll();
+      persistConnections();
+      try {
+        scheduleRepaint();
+      } catch {}
+      return;
     }
   }
   document.querySelectorAll(".flow-blocks").forEach((blocks) => {
@@ -446,6 +592,9 @@ document.addEventListener("DOMContentLoaded", () => {
     blocks.appendChild(newBlock);
     saveAll();
     persistConnections();
+    try {
+      scheduleRepaint();
+    } catch {}
   }
   // クリック削除は無効化（空欄＋Backspace/Deleteのみ削除を許可）
   function removeBlock(e) {
@@ -591,12 +740,12 @@ document.addEventListener("DOMContentLoaded", () => {
   function makeLineInLayer(layer, x1, y1, x2, y2) {
     const section = layer.closest && layer.closest(".flow-section");
     const isNeg = section && section.id === "negative-flow";
-    const color = isNeg ? "#c0392b" : "#3b5998";
     const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
     svg.setAttribute("width", "100%");
     svg.setAttribute("height", "100%");
     svg.style.position = "absolute";
     svg.style.inset = "0";
+    svg.classList.add(isNeg ? "neg" : "aff");
     const defs = document.createElementNS("http://www.w3.org/2000/svg", "defs");
     const marker = document.createElementNS(
       "http://www.w3.org/2000/svg",
@@ -611,7 +760,7 @@ document.addEventListener("DOMContentLoaded", () => {
     marker.setAttribute("refX", "10");
     marker.setAttribute("refY", "3.5");
     marker.setAttribute("orient", "auto");
-    marker.innerHTML = `<polygon points="0 0, 10 3.5, 0 7" fill="${color}" />`;
+    marker.innerHTML = `<polygon points="0 0, 10 3.5, 0 7" fill="currentColor" />`;
     defs.appendChild(marker);
     svg.appendChild(defs);
     // 当たり判定用（広い・透明）
@@ -630,7 +779,8 @@ document.addEventListener("DOMContentLoaded", () => {
     vis.setAttribute("y1", y1);
     vis.setAttribute("x2", x2);
     vis.setAttribute("y2", y2);
-    vis.setAttribute("stroke", color);
+    // 色はCSSの currentColor を使用（テーマに追従）
+    vis.style.stroke = "currentColor";
     vis.setAttribute("stroke-width", "2");
     vis.setAttribute("marker-end", `url(#${markerId})`);
     vis.setAttribute("stroke-linecap", "round");
@@ -937,6 +1087,110 @@ document.addEventListener("DOMContentLoaded", () => {
       el.classList.remove("active");
     });
   });
+
+  // ===== 並べ替え（左ハンドルでドラッグ） =====
+  const reorderDrag = {
+    active: false,
+    block: null,
+    wrap: null,
+    targetWrap: null,
+    placeholder: null,
+    startY: 0,
+  };
+  function makePlaceholder(h) {
+    const ph = document.createElement("div");
+    ph.className = "flow-block placeholder";
+    ph.style.height = h + "px";
+    ph.style.minHeight = h + "px";
+    ph.style.boxSizing = "border-box";
+    return ph;
+  }
+  function onReorderHandleDown(e) {
+    e.preventDefault();
+    const block = e.currentTarget.closest(".flow-block");
+    const wrap = block && block.parentElement;
+    if (!block || !wrap || !wrap.classList.contains("flow-blocks")) return;
+    reorderDrag.active = true;
+    reorderDrag.block = block;
+    reorderDrag.wrap = wrap;
+    reorderDrag.targetWrap = wrap;
+    reorderDrag.startY = e.clientY;
+    reorderDrag.placeholder = makePlaceholder(block.offsetHeight);
+    block.classList.add("dragging");
+    // 挿入位置は最初は元の直後
+    if (block.nextSibling)
+      wrap.insertBefore(reorderDrag.placeholder, block.nextSibling);
+    else wrap.appendChild(reorderDrag.placeholder);
+    document.body.classList.add("no-select");
+    document.addEventListener("mousemove", onReorderMouseMove);
+    document.addEventListener("mouseup", onReorderMouseUp);
+  }
+  function onReorderMouseMove(e) {
+    if (!reorderDrag.active) return;
+    const y = e.clientY;
+    const x = e.clientX;
+    // 現在のセクション内でホバーしているカラム(.flow-blocks)を特定
+    const section = reorderDrag.block.closest(".flow-section");
+    let hoveredWrap = null;
+    const els = document.elementsFromPoint(x, y) || [];
+    for (const el of els) {
+      const w = el.closest && el.closest(".flow-blocks");
+      if (w && w.closest(".flow-section") === section) {
+        hoveredWrap = w;
+        break;
+      }
+    }
+    if (!hoveredWrap) hoveredWrap = reorderDrag.targetWrap || reorderDrag.wrap;
+    reorderDrag.targetWrap = hoveredWrap;
+    // 対象wrap内の挿入位置を決定（ドラッグ中ブロックとプレースホルダーは除外）
+    const children = Array.from(hoveredWrap.children).filter(
+      (el) => el !== reorderDrag.block && el !== reorderDrag.placeholder
+    );
+    let inserted = false;
+    for (const child of children) {
+      const r = child.getBoundingClientRect();
+      const mid = r.top + r.height / 2;
+      if (y < mid) {
+        if (reorderDrag.placeholder !== child)
+          hoveredWrap.insertBefore(reorderDrag.placeholder, child);
+        inserted = true;
+        break;
+      }
+    }
+    if (!inserted) {
+      // 一番下へ
+      if (hoveredWrap.lastElementChild !== reorderDrag.placeholder)
+        hoveredWrap.appendChild(reorderDrag.placeholder);
+    }
+  }
+  function onReorderMouseUp() {
+    if (!reorderDrag.active) return;
+    const { block, placeholder } = reorderDrag;
+    document.removeEventListener("mousemove", onReorderMouseMove);
+    document.removeEventListener("mouseup", onReorderMouseUp);
+    document.body.classList.remove("no-select");
+    const destWrap = placeholder && placeholder.parentElement;
+    if (block && placeholder && destWrap)
+      destWrap.insertBefore(block, placeholder);
+    if (placeholder && placeholder.parentElement)
+      placeholder.parentElement.removeChild(placeholder);
+    if (block) block.classList.remove("dragging");
+    reorderDrag.active = false;
+    reorderDrag.block = null;
+    reorderDrag.wrap = null;
+    reorderDrag.targetWrap = null;
+    reorderDrag.placeholder = null;
+    // 保存と再描画
+    try {
+      saveAll();
+    } catch {}
+    try {
+      persistConnections();
+    } catch {}
+    try {
+      scheduleRepaint();
+    } catch {}
+  }
 
   // スイッチボタンで肯定側・否定側フロー切り替え
   const btnAff = document.getElementById("switch-to-affirmative");
@@ -1255,6 +1509,7 @@ document.addEventListener("DOMContentLoaded", () => {
             ? "1.6"
             : "";
       });
+      applyTheme(snap.settings.theme || "system");
     }
     // 接続
     const conns = snap.connections || { affirmative: [], negative: [] };
@@ -1273,8 +1528,9 @@ document.addEventListener("DOMContentLoaded", () => {
   exportBtn &&
     exportBtn.addEventListener("click", () => {
       const snap = collectSnapshot();
-      const blob = new Blob([JSON.stringify(snap, null, 2)], {
-        type: "application/json",
+      const bom = "\uFEFF"; // UTF-8 BOM
+      const blob = new Blob([bom, JSON.stringify(snap, null, 2)], {
+        type: "application/json;charset=utf-8",
       });
       const a = document.createElement("a");
       a.href = URL.createObjectURL(blob);
@@ -1300,7 +1556,8 @@ document.addEventListener("DOMContentLoaded", () => {
       if (!file) return;
       try {
         const text = await file.text();
-        const json = JSON.parse(text);
+        const cleaned = text.replace(/^\uFEFF/, ""); // 先頭BOMを除去
+        const json = JSON.parse(cleaned);
         applySnapshot(json);
       } catch (err) {
         alert("読み込みに失敗しました。ファイル形式をご確認ください。");
@@ -1334,7 +1591,8 @@ document.addEventListener("DOMContentLoaded", () => {
     txt += buildFlowText(affFlow, "肯定側");
     txt += buildFlowText(negFlow, "否定側");
     const filename = "flows.txt";
-    const blob = new Blob([txt], { type: "text/plain" });
+    const bom = "\uFEFF"; // UTF-8 BOM
+    const blob = new Blob([bom, txt], { type: "text/plain;charset=utf-8" });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
     a.download = filename;
@@ -1345,4 +1603,95 @@ document.addEventListener("DOMContentLoaded", () => {
       URL.revokeObjectURL(a.href);
     }, 100);
   });
+  // 文字起こし（Chrome Web Speech API）
+  (function setupTranscribe() {
+    const area = document.getElementById("transcribe-text");
+    const btnStart = document.getElementById("transcribe-start");
+    const btnStop = document.getElementById("transcribe-stop");
+    const btnClear = document.getElementById("transcribe-clear");
+    const selLang = document.getElementById("transcribe-lang");
+    const status = document.getElementById("transcribe-status");
+    const autoScroll = document.getElementById("transcribe-autoscroll");
+    if (!area || !btnStart || !btnStop || !btnClear || !selLang || !status)
+      return;
+    const SpeechRecognition =
+      window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      status.textContent =
+        "このブラウザでは文字起こしが利用できません（Chrome推奨）";
+      btnStart.disabled = true;
+      btnStop.disabled = true;
+      return;
+    }
+    let recog = null;
+    let running = false;
+    function setStatus(t) {
+      status.textContent = t || "";
+    }
+    function appendText(txt) {
+      if (!txt) return;
+      const wasEmpty = area.innerText.trim().length === 0;
+      area.innerText = wasEmpty ? txt : area.innerText + "\n" + txt;
+      if (autoScroll && autoScroll.checked) area.scrollTop = area.scrollHeight;
+      // 保存
+      try {
+        saveAll();
+      } catch {}
+    }
+    function start() {
+      if (running) return;
+      recog = new SpeechRecognition();
+      recog.lang = selLang.value || "ja-JP";
+      recog.interimResults = true;
+      recog.continuous = true;
+      let interim = "";
+      recog.onstart = () => {
+        running = true;
+        setStatus("文字起こし中…");
+      };
+      recog.onerror = (e) => {
+        setStatus("エラー: " + (e.error || "unknown"));
+      };
+      recog.onend = () => {
+        running = false;
+        setStatus("停止");
+      };
+      recog.onresult = (e) => {
+        let finalText = "";
+        interim = "";
+        for (let i = e.resultIndex; i < e.results.length; i++) {
+          const res = e.results[i];
+          const t = res[0] && res[0].transcript ? res[0].transcript.trim() : "";
+          if (!t) continue;
+          if (res.isFinal) finalText += (finalText ? " " : "") + t;
+          else interim += (interim ? " " : "") + t;
+        }
+        if (finalText) appendText(finalText);
+        if (interim) setStatus("文字起こし中… " + interim);
+        else if (running) setStatus("文字起こし中…");
+      };
+      try {
+        recog.start();
+      } catch {}
+    }
+    function stop() {
+      try {
+        recog && recog.stop();
+      } catch {}
+    }
+    function clear() {
+      area.innerText = "";
+      try {
+        saveAll();
+      } catch {}
+    }
+    btnStart.addEventListener("click", start);
+    btnStop.addEventListener("click", stop);
+    btnClear.addEventListener("click", clear);
+  })();
+  // フッター年号設定
+  (function setCopyright() {
+    const y = document.getElementById("copyright-year");
+    if (y) y.textContent = String(new Date().getFullYear());
+  })();
 });

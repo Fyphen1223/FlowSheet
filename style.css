@@ -37,6 +37,26 @@
   background: #dbe6fa;
 }
 
+/* テーマ切替ボタン（ガイドの左） */
+.theme-btn {
+  position: fixed;
+  top: 10px;
+  right: 94px;
+  width: 36px;
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #e9f0fb;
+  border: 1.5px solid #b0c4de;
+  border-radius: 50%;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+  cursor: pointer;
+}
+.theme-btn:hover {
+  background: #dbe6fa;
+}
+
 /* モーダル */
 .settings-overlay {
   position: fixed;
@@ -112,6 +132,26 @@
   align-items: center;
   gap: 6px;
 }
+.drag-reorder-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  background: transparent;
+  border: none;
+  cursor: grab;
+  padding: 0;
+  margin-right: 2px;
+  user-select: none;
+}
+.drag-reorder-btn:active {
+  cursor: grabbing;
+  background: color-mix(in oklab, #000 7%, transparent);
+}
+.drag-reorder-btn svg rect {
+  fill: var(--text-weak);
+}
 .flow-block-text {
   flex: 1 1 auto;
 }
@@ -179,12 +219,19 @@
   margin: 0 8px 0 0;
   position: relative;
 }
+.flow-block.dragging {
+  opacity: 0.6;
+}
+.flow-block.placeholder {
+  background: transparent;
+  border: 2px dashed var(--muted);
+}
 .flow-block:focus {
   border: 2px solid #3b5998;
   background: #f0f6ff;
 }
 .flow-block.connect-target {
-  outline: 2px dashed #3b5998;
+  outline: 2px dashed var(--primary);
   outline-offset: 2px;
 }
 .add-block-btn {
@@ -229,7 +276,7 @@
 .sheet-info-row {
   display: flex;
   flex-wrap: wrap;
-  gap: 32px 24px;
+  gap: 16px 16px;
   margin-bottom: 10px;
   align-items: flex-end;
 }
@@ -350,8 +397,7 @@ header h1 {
 }
 .timer-wrap {
   display: flex;
-  justify-content: flex-end;
-  margin-left: auto;
+  justify-content: flex-start;
 }
 .timer-panel {
   display: inline-flex;
@@ -379,6 +425,44 @@ header h1 {
   padding: 6px 10px;
   cursor: pointer;
 }
+.tools-wrap {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+.transcribe-wrap {
+  display: flex;
+}
+.transcribe-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  background: var(--panel-weak);
+  border: 1px solid var(--muted);
+  border-radius: 8px;
+  padding: 6px 8px;
+}
+.transcribe-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.transcribe-status {
+  font-size: 0.85em;
+  color: var(--text-weak);
+  min-height: 1.2em;
+}
+.transcribe-area {
+  min-height: 64px;
+  max-height: 160px;
+  overflow: auto;
+  border: 1px dashed var(--muted);
+  border-radius: 6px;
+  padding: 6px 8px;
+  background: var(--panel);
+  color: var(--text);
+}
 .timer-btn:hover {
   background: #294077;
 }
@@ -392,6 +476,13 @@ header h1 {
   align-items: center;
   gap: 6px;
   color: #333;
+}
+@media (max-width: 700px) {
+  .tools-wrap {
+    flex-direction: column;
+    gap: 6px;
+    margin-left: 0;
+  }
 }
 .flow-section {
   margin-bottom: 36px;
@@ -412,6 +503,13 @@ header h1 {
 }
 .arrow-svg-layer svg line.hit {
   pointer-events: stroke;
+}
+/* 矢印色（セクション別） */
+.flow-section#affirmative-flow .arrow-svg-layer svg.aff {
+  color: var(--aff);
+}
+.flow-section#negative-flow .arrow-svg-layer svg.neg {
+  color: var(--neg);
 }
 .flow-columns {
   display: flex;
@@ -482,6 +580,14 @@ header h1 {
   background: #e0e7f7;
   font-weight: bold;
 }
+/* フッター */
+.app-footer {
+  padding: 12px 2vw 24px 2vw;
+  text-align: center;
+  color: var(--text-weak);
+  font-size: 0.9em;
+  opacity: 0.8;
+}
 @media (max-width: 900px) {
   .flow-columns {
     flex-direction: column-reverse;
@@ -492,4 +598,194 @@ header h1 {
     max-width: 100%;
     min-width: 0;
   }
+}
+
+/* ===================== */
+/* テーマ用のCSS変数     */
+/* ===================== */
+:root {
+  --bg: #f7f7fa;
+  --panel: #ffffff;
+  --panel-weak: #f3f6fa;
+  --text: #222;
+  --text-weak: #333;
+  --muted: #b0c4de;
+  --primary: #3b5998;
+  --aff: #3b5998;
+  --neg: #c0392b;
+  --primary-weak: #e0e7f7;
+  --primary-weak-2: #e9f0fb;
+  --primary-weak-hover: #dbe6fa;
+  --col-bg: #e9f0fb;
+  --block-bg: #fff;
+  --block-focus-bg: #f0f6ff;
+  --table-head: #e0e7f7;
+  --shadow: rgba(0, 0, 0, 0.06);
+}
+
+.dark {
+  --bg: #0f1220;
+  --panel: #171a2a;
+  --panel-weak: #121528;
+  --text: #e8eaf4;
+  --text-weak: #c8cbe0;
+  --muted: #44506d;
+  --primary: #6aa3ff;
+  --aff: #6aa3ff;
+  --neg: #ff6b6b;
+  --primary-weak: #1a2540;
+  --primary-weak-2: #152038;
+  --primary-weak-hover: #1f2b4d;
+  --col-bg: #121a2e;
+  --block-bg: #1a1f33;
+  --block-focus-bg: #1f2742;
+  --table-head: #1a2540;
+  --shadow: rgba(0, 0, 0, 0.3);
+}
+
+/* 変数適用（既存色の置き換え） */
+body {
+  background: var(--bg);
+  color: var(--text);
+}
+.container {
+  background: var(--panel);
+}
+header h1 {
+  color: var(--text);
+}
+.switch-btn {
+  background: var(--primary-weak);
+  color: var(--primary);
+  border-color: var(--muted);
+}
+.switch-btn.active,
+.switch-btn:focus {
+  background: var(--primary);
+  color: #fff;
+  border-bottom-color: var(--panel);
+}
+.switch-btn:not(.active):hover {
+  background: var(--primary-weak-hover);
+}
+.sheet-info {
+  background: var(--panel-weak);
+}
+.sheet-info label {
+  color: var(--text-weak);
+}
+.sheet-info input[type="text"],
+.sheet-info input[type="date"] {
+  background: var(--panel);
+  border-color: var(--muted);
+  color: var(--text);
+}
+.sheet-info input[type="text"]::placeholder {
+  color: #9aa7bd;
+}
+.timer-panel {
+  background: var(--panel-weak);
+  border-color: var(--muted);
+}
+.timer-display {
+  color: var(--text);
+}
+.timer-btn {
+  background: var(--primary);
+}
+.timer-btn:hover {
+  background: color-mix(in oklab, var(--primary) 80%, black);
+}
+.timer-select {
+  border-color: var(--muted);
+  background: var(--panel);
+  color: var(--text);
+}
+.timer-toggle {
+  color: var(--text-weak);
+}
+.flow-col {
+  background: var(--col-bg);
+}
+.col-title {
+  background: var(--primary);
+  color: #fff;
+}
+.col-title span {
+  color: color-mix(in oklab, #fff 70%, var(--primary));
+}
+.flow-block {
+  background: var(--block-bg);
+  border-color: var(--muted);
+}
+.flow-block:focus {
+  background: var(--block-focus-bg);
+  border-color: var(--primary);
+}
+.add-block-btn {
+  background: var(--primary-weak-2);
+  border-color: var(--muted);
+  color: var(--primary);
+}
+.add-block-btn:hover {
+  background: var(--primary-weak-hover);
+}
+.download-btn {
+  background: var(--primary);
+}
+.download-btn:hover {
+  background: color-mix(in oklab, var(--primary) 80%, black);
+}
+.score-table th,
+.score-table td {
+  border-color: var(--muted);
+  color: var(--text);
+}
+.score-table th {
+  background: var(--table-head);
+}
+.settings-modal {
+  background: var(--panel);
+}
+.settings-modal-header {
+  background: var(--primary);
+  color: #fff;
+}
+.settings-overlay {
+  background: color-mix(in oklab, black 35%, transparent);
+}
+.settings-btn,
+.help-btn,
+.theme-btn {
+  background: var(--primary-weak-2);
+  border-color: var(--muted);
+  box-shadow: 0 1px 3px var(--shadow);
+}
+.settings-btn:hover,
+.help-btn:hover,
+.theme-btn:hover {
+  background: var(--primary-weak-hover);
+}
+.settings-btn svg path,
+.help-btn svg path,
+.theme-btn svg path {
+  fill: var(--primary);
+}
+.drag-connect-btn svg circle {
+  fill: var(--text-weak);
+}
+.drag-connect-btn:active {
+  background: color-mix(in oklab, #000 7%, transparent);
+}
+.flow-content {
+  background: var(--block-bg);
+  border-color: var(--muted);
+}
+
+.no-select {
+  user-select: none !important;
+}
+
+a {
+  color: var(--primary);
 }

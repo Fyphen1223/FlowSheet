@@ -3,13 +3,16 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#3b5998" />
     <title>ディベート・フローシート</title>
     <link rel="stylesheet" href="style.css" />
+    <link rel="shortcut icon" href="/icons/icon-192.png" type="image/x-icon" />
+    <link rel="manifest" href="manifest.webmanifest" />
   </head>
   <body>
     <div class="container">
       <header>
-        <h1>ディベート・フローシート</h1>
+        <h1>フローシート</h1>
         <div style="text-align: right; margin: 0 2vw 10px 0">
           <button id="download-flow-btn" class="download-btn">
             フローをテキストでダウンロード
@@ -59,8 +62,6 @@
               class="sheet-topic"
               placeholder="論題を入力"
           /></label>
-        </div>
-        <div class="sheet-info-row">
           <label>年月日：<input type="date" class="sheet-date" /></label>
           <label
             >大会：<input
@@ -71,8 +72,6 @@
           <label
             >会場：<input type="text" class="sheet-place" placeholder="会場"
           /></label>
-        </div>
-        <div class="sheet-info-row">
           <label
             >肯定側チーム名：<input
               type="text"
@@ -85,28 +84,90 @@
               class="sheet-team-negative"
               placeholder="否定側チーム名"
           /></label>
-          <div class="timer-wrap" aria-label="スピーチタイマー">
-            <div class="timer-panel">
-              <span id="timer-display" class="timer-display" aria-live="polite"
-                >00:00</span
-              >
-              <button id="timer-start" class="timer-btn" title="開始/一時停止">
-                ▶
-              </button>
-              <button id="timer-reset" class="timer-btn" title="リセット">
-                ⟲
-              </button>
-              <select id="timer-preset" class="timer-select" title="プリセット">
-                <option value="180000">3:00</option>
-                <option value="240000">4:00</option>
-                <option value="300000" selected>6:00</option>
-                <option value="360000">1:00</option>
-                <option value="480000">2:00</option>
-              </select>
-              <label class="timer-toggle">
-                <input type="checkbox" id="timer-countdown" checked />
-                カウントダウン
-              </label>
+          <div class="tools-wrap">
+            <div class="transcribe-wrap" aria-label="文字起こし">
+              <div class="transcribe-panel">
+                <div class="transcribe-controls">
+                  <button
+                    id="transcribe-start"
+                    class="timer-btn"
+                    title="文字起こし開始"
+                  >
+                    🎙
+                  </button>
+                  <button id="transcribe-stop" class="timer-btn" title="停止">
+                    ■
+                  </button>
+                  <button
+                    id="transcribe-clear"
+                    class="timer-btn"
+                    title="クリア"
+                  >
+                    ✕
+                  </button>
+                  <select
+                    id="transcribe-lang"
+                    class="timer-select"
+                    title="言語"
+                  >
+                    <option value="ja-JP" selected>日本語</option>
+                    <option value="en-US">English</option>
+                  </select>
+                  <label class="timer-toggle"
+                    ><input
+                      type="checkbox"
+                      id="transcribe-autoscroll"
+                      checked
+                    />自動スクロール</label
+                  >
+                </div>
+                <div
+                  id="transcribe-status"
+                  class="transcribe-status"
+                  aria-live="polite"
+                ></div>
+                <div
+                  id="transcribe-text"
+                  class="transcribe-area"
+                  contenteditable="true"
+                  spellcheck="false"
+                ></div>
+              </div>
+            </div>
+            <div class="timer-wrap" aria-label="スピーチタイマー">
+              <div class="timer-panel">
+                <span
+                  id="timer-display"
+                  class="timer-display"
+                  aria-live="polite"
+                  >00:00</span
+                >
+                <button
+                  id="timer-start"
+                  class="timer-btn"
+                  title="開始/一時停止"
+                >
+                  ▶
+                </button>
+                <button id="timer-reset" class="timer-btn" title="リセット">
+                  ⟲
+                </button>
+                <select
+                  id="timer-preset"
+                  class="timer-select"
+                  title="プリセット"
+                >
+                  <option value="180000">3:00</option>
+                  <option value="240000">4:00</option>
+                  <option value="300000" selected>6:00</option>
+                  <option value="360000">1:00</option>
+                  <option value="480000">2:00</option>
+                </select>
+                <label class="timer-toggle">
+                  <input type="checkbox" id="timer-countdown" checked />
+                  カウントダウン
+                </label>
+              </div>
             </div>
           </div>
         </div>
@@ -123,6 +184,21 @@
           <path
             fill="#3b5998"
             d="M12 8.5a3.5 3.5 0 1 0 0 7a3.5 3.5 0 0 0 0-7m8.94 2.94l-1.23-.71c.04-.24.06-.49.06-.73s-.02-.5-.06-.74l1.23-.71a.5.5 0 0 0 .18-.68l-1.8-3.12a.5.5 0 0 0-.64-.2l-1.23.5a6.7 6.7 0 0 0-1.26-.73l-.19-1.32a.5.5 0 0 0-.5-.42h-3.6a.5.5 0 0 0-.5.42l-.19 1.32c-.45.19-.87.42-1.26.73l-1.23-.5a.5.5 0 0 0-.64.2l-1.8 3.12a.5.5 0 0 0 .18.68l1.23.71c-.04.24-.06.49-.06.74s.02.49.06.73l-1.23.71a.5.5 0 0 0-.18.68l1.8 3.12a.5.5 0 0 0 .64.2l1.23-.5c.39.31.81.55 1.26.73l.19 1.32a.5.5 0 0 0 .5.42h3.6a.5.5 0 0 0 .5-.42l.19-1.32c.45-.18.87-.42 1.26-.73l1.23.5a.5.5 0 0 0 .64-.2l1.8-3.12a.5.5 0 0 0-.18-.68Z"
+          />
+        </svg>
+      </button>
+      <!-- テーマ切替ボタン（右上固定・ガイドの左） -->
+      <button id="toggle-theme-btn" class="theme-btn" title="ダークモード切替">
+        <svg
+          width="18"
+          height="18"
+          viewBox="0 0 24 24"
+          xmlns="http://www.w3.org/2000/svg"
+          aria-hidden="true"
+        >
+          <path
+            fill="#3b5998"
+            d="M12 2a9.99 9.99 0 0 0 0 20c5.52 0 10-4.48 10-10c0-1.33-.26-2.6-.73-3.76c-.2-.49-.84-.58-1.2-.2A6.5 6.5 0 0 1 12.96 18C9.11 18 6 14.89 6 11.04c0-3 1.93-5.55 4.6-6.45c.52-.18.61-.85.18-1.2A9.96 9.96 0 0 0 12 2Z"
           />
         </svg>
       </button>
@@ -176,6 +252,14 @@
                 <option value="default">標準</option>
                 <option value="relaxed">少し広く</option>
                 <option value="loose">広く</option>
+              </select>
+            </label>
+            <label class="settings-row">
+              <span>テーマ</span>
+              <select id="setting-theme">
+                <option value="system">OSに合わせる</option>
+                <option value="light">ライト</option>
+                <option value="dark">ダーク</option>
               </select>
             </label>
           </div>
@@ -447,6 +531,12 @@
           </table>
         </section>
       </main>
+      <footer class="app-footer">
+        <span
+          >© <span id="copyright-year"></span> FlowSheet by
+          <a href="https://github.com/Fyphen1223">Fyphen1223</a></span
+        >
+      </footer>
     </div>
     <script src="main.js"></script>
   </body>

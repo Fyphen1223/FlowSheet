@@ -732,9 +732,22 @@ header h1 {
 }
 .download-btn {
   background: var(--primary);
+  color: #fff; /* ダークでも白文字を維持 */
+  border: 1px solid transparent;
 }
 .download-btn:hover {
   background: color-mix(in oklab, var(--primary) 80%, black);
+  color: #fff;
+}
+.download-btn:focus-visible {
+  outline: 3px solid color-mix(in oklab, var(--primary) 60%, #ffffff);
+  outline-offset: 2px;
+}
+/* 強制的に文字色を白に（他スタイルより優先） */
+.download-btn,
+.download-btn:visited,
+.download-btn * {
+  color: #ffffff !important;
 }
 .score-table th,
 .score-table td {
@@ -788,4 +801,54 @@ header h1 {
 
 a {
   color: var(--primary);
+}
+
+/* ============ 検索UI ============ */
+.search-bar {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.search-bar input[type="text"] {
+  border: 1px solid var(--muted);
+  background: var(--panel);
+  color: var(--text);
+  border-radius: 6px;
+  padding: 6px 10px;
+  min-width: 220px;
+}
+.search-btn {
+  background: var(--primary-weak-2);
+  color: var(--primary);
+  border: 1px solid var(--muted);
+  border-radius: 6px;
+  padding: 4px 8px;
+  cursor: pointer;
+}
+.search-btn:hover {
+  background: var(--primary-weak-hover);
+}
+.search-status {
+  color: var(--text-weak);
+  font-size: 0.9em;
+  min-width: 48px;
+  display: inline-block;
+  text-align: right;
+}
+.mark-hit {
+  background: #ffea70;
+  color: #222;
+  box-shadow: 0 0 0 2px #ffea70;
+}
+.mark-hit.current {
+  background: #ffc83d;
+  box-shadow: 0 0 0 3px #ffc83d;
+}
+
+/* 設定ベースのキーワードハイライト */
+.kw-mark {
+  background: rgba(59, 89, 152, 0.18); /* primary weak */
+  border-bottom: 2px solid var(--primary);
+  padding: 0 1px;
+  border-radius: 2px;
 }

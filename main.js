@@ -15,6 +15,60 @@ document.addEventListener("DOMContentLoaded", () => {
   const STORAGE_KEY = "flowsheet-autosave-v1";
   const SETTINGS_KEY = "flowsheet-settings-v1";
   const THEME_KEY = SETTINGS_KEY; // 同一オブジェクトで管理（fontSize, lineHeight, theme）
+  const BACKUP_KEY = "flowsheet-last-backup-v1";
+  const MAX_IMPORT_SIZE = 5 * 1024 * 1024; // 5MB 上限
+
+  // --- 共有リンク用ユーティリティ（URL-safe Base64, 圧縮は任意） ---
+  function b64UrlEncode(u8) {
+    let str = "";
+    for (let i = 0; i < u8.length; i++) str += String.fromCharCode(u8[i]);
+    return btoa(str).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  }
+  function b64UrlDecodeToU8(s) {
+    s = s.replace(/-/g, "+").replace(/_/g, "/");
+    const pad = s.length % 4 === 2 ? "==" : s.length % 4 === 3 ? "=" : "";
+    const bin = atob(s + pad);
+    const u8 = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
+    return u8;
+  }
+  async function compressToU8(text) {
+    // CompressionStreamがあればdeflate、無ければnull
+    try {
+      if (window.CompressionStream) {
+        const cs = new CompressionStream("deflate-raw");
+        const writer = cs.writable.getWriter();
+        await writer.write(new TextEncoder().encode(text));
+        await writer.close();
+        const buf = await new Response(cs.readable).arrayBuffer();
+        return new Uint8Array(buf);
+      }
+    } catch {}
+    return null;
+  }
+  async function decompressToText(u8) {
+    try {
+      if (window.DecompressionStream) {
+        const ds = new DecompressionStream("deflate-raw");
+        const writer = ds.writable.getWriter();
+        await writer.write(u8);
+        await writer.close();
+        const buf = await new Response(ds.readable).arrayBuffer();
+        return new TextDecoder().decode(buf);
+      }
+    } catch {}
+    return null;
+  }
+  function jsonToBase64(json) {
+    const text = JSON.stringify(json);
+    const u8 = new TextEncoder().encode(text);
+    return b64UrlEncode(u8);
+  }
+  function base64ToJson(b64) {
+    const u8 = b64UrlDecodeToU8(b64);
+    const text = new TextDecoder().decode(u8);
+    return JSON.parse(text);
+  }
   // 共通: flow-blockテンプレ生成
   function createReorderButton() {
     const btn = document.createElement("button");
@@ -292,6 +346,8 @@ document.addEventListener("DOMContentLoaded", () => {
         else el.style.lineHeight = "";
       });
       applyTheme(s.theme || "system");
+      // 初期ハイライト適用
+      applyKeywordHighlights();
     } else {
       applyTheme("system");
     }
@@ -307,6 +363,84 @@ document.addEventListener("DOMContentLoaded", () => {
   const selFont = document.getElementById("setting-font-size");
   const selLine = document.getElementById("setting-line-height");
   const selTheme = document.getElementById("setting-theme");
+  const chkSnapOrth = document.getElementById("setting-snap-orth");
+  const inpHl = document.getElementById("setting-highlight-keywords");
+  const chkHlCase = document.getElementById("setting-highlight-case-sensitive");
+
+  // キーワードハイライト適用
+  function applyKeywordHighlights(options) {
+    const skipFocused = !!(options && options.skipFocused);
+    const onlyEl = options && options.onlyEl ? options.onlyEl : null;
+    try {
+      const s = JSON.parse(localStorage.getItem(SETTINGS_KEY) || "null") || {};
+      const raw = (s.highlightKeywords || "").trim();
+      const cs = !!s.highlightCaseSensitive;
+      const focused =
+        document.activeElement &&
+        document.activeElement.classList &&
+        document.activeElement.classList.contains("flow-block-text")
+          ? document.activeElement
+          : null;
+      // 対象コンテナを決定
+      let containers = [];
+      if (onlyEl) containers = [onlyEl];
+      else
+        containers = Array.from(
+          document.querySelectorAll(".flow-block-text")
+        ).filter((el) => !(skipFocused && focused === el));
+      // 既存ハイライトをクリア（対象のみ）
+      containers.forEach((container) => {
+        container.querySelectorAll(".kw-mark").forEach((n) => {
+          const parent = n.parentNode;
+          if (!parent) return;
+          parent.replaceChild(document.createTextNode(n.textContent || ""), n);
+          parent.normalize && parent.normalize();
+        });
+      });
+      if (!raw) return;
+      const keywords = raw
+        .split(",")
+        .map((t) => t.trim())
+        .filter(Boolean);
+      if (!keywords.length) return;
+      const flags = cs ? "g" : "gi";
+      // エスケープ
+      const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const re = new RegExp("(" + keywords.map(esc).join("|") + ")", flags);
+      containers.forEach((el) => {
+        // テキストノードを走査して置換
+        const walker = document.createTreeWalker(
+          el,
+          NodeFilter.SHOW_TEXT,
+          null
+        );
+        const texts = [];
+        while (walker.nextNode()) texts.push(walker.currentNode);
+        texts.forEach((tn) => {
+          const val = tn.nodeValue;
+          if (!val) return;
+          if (!re.test(val)) return;
+          const frag = document.createDocumentFragment();
+          let lastIdx = 0;
+          val.replace(re, (m, g1, idx) => {
+            if (idx > lastIdx)
+              frag.appendChild(
+                document.createTextNode(val.slice(lastIdx, idx))
+              );
+            const mark = document.createElement("span");
+            mark.className = "kw-mark";
+            mark.textContent = val.substr(idx, g1.length);
+            frag.appendChild(mark);
+            lastIdx = idx + g1.length;
+            return m;
+          });
+          if (lastIdx < val.length)
+            frag.appendChild(document.createTextNode(val.slice(lastIdx)));
+          tn.parentNode && tn.parentNode.replaceChild(frag, tn);
+        });
+      });
+    } catch {}
+  }
 
   function openSettings() {
     overlay.classList.add("active");
@@ -317,15 +451,24 @@ document.addEventListener("DOMContentLoaded", () => {
         selFont.value = s.fontSize || "default";
         selLine.value = s.lineHeight || "default";
         if (selTheme) selTheme.value = s.theme || "system";
+        if (chkSnapOrth) chkSnapOrth.checked = s.snapOrth !== false; // default true
+        if (inpHl) inpHl.value = s.highlightKeywords || "";
+        if (chkHlCase) chkHlCase.checked = !!s.highlightCaseSensitive;
       } else {
         selFont.value = "default";
         selLine.value = "default";
         if (selTheme) selTheme.value = "system";
+        if (chkSnapOrth) chkSnapOrth.checked = true;
+        if (inpHl) inpHl.value = "";
+        if (chkHlCase) chkHlCase.checked = false;
       }
     } catch {
       selFont.value = "default";
       selLine.value = "default";
       if (selTheme) selTheme.value = "system";
+      if (chkSnapOrth) chkSnapOrth.checked = true;
+      if (inpHl) inpHl.value = "";
+      if (chkHlCase) chkHlCase.checked = false;
     }
   }
   function closeSettings() {
@@ -336,6 +479,9 @@ document.addEventListener("DOMContentLoaded", () => {
     const fontChoice = selFont.value;
     const lineChoice = selLine.value;
     const themeChoice = selTheme ? selTheme.value : "system";
+    const snapOrth = chkSnapOrth ? !!chkSnapOrth.checked : true;
+    const hlKeywords = inpHl ? (inpHl.value || "").trim() : "";
+    const hlCase = chkHlCase ? !!chkHlCase.checked : false;
     document.querySelectorAll(".flow-block-text").forEach((el) => {
       if (fontChoice === "xlarge") el.style.fontSize = "18px";
       else if (fontChoice === "large") el.style.fontSize = "16px";
@@ -351,9 +497,18 @@ document.addEventListener("DOMContentLoaded", () => {
       fontSize: fontChoice,
       lineHeight: lineChoice,
       theme: themeChoice,
+      snapOrth,
+      highlightKeywords: hlKeywords,
+      highlightCaseSensitive: hlCase,
     };
     localStorage.setItem(SETTINGS_KEY, JSON.stringify(next));
     applyTheme(themeChoice);
+    applyKeywordHighlights();
+    // 矢印再描画（描画方式が変わるため）
+    try {
+      const data = JSON.parse(localStorage.getItem(STORAGE_KEY) || "null");
+      if (data && data.connections) restoreConnections(data.connections);
+    } catch {}
   }
   openBtn && openBtn.addEventListener("click", openSettings);
   closeBtn && closeBtn.addEventListener("click", closeSettings);
@@ -433,6 +588,88 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     }
   });
+  // 入力変更でハイライトを更新（軽負荷のためdebounce）
+  (function setupHighlightAutoRefresh() {
+    let t = null;
+    let composing = false;
+    function clearMarks(el) {
+      try {
+        el.querySelectorAll(".kw-mark").forEach((n) => {
+          const p = n.parentNode;
+          if (!p) return;
+          p.replaceChild(document.createTextNode(n.textContent || ""), n);
+        });
+        el.normalize && el.normalize();
+      } catch {}
+    }
+    document.addEventListener("compositionstart", (e) => {
+      if (
+        e.target &&
+        e.target.classList &&
+        e.target.classList.contains("flow-block-text")
+      )
+        composing = true;
+    });
+    document.addEventListener("compositionend", (e) => {
+      if (
+        e.target &&
+        e.target.classList &&
+        e.target.classList.contains("flow-block-text")
+      ) {
+        composing = false;
+        // IME確定後に再適用（編集中スキップ）
+        try {
+          applyKeywordHighlights({ skipFocused: true });
+        } catch {}
+      }
+    });
+    document.addEventListener("input", (e) => {
+      if (
+        !(
+          e.target &&
+          e.target.classList &&
+          e.target.classList.contains("flow-block-text")
+        )
+      )
+        return;
+      if (composing) return; // IME中は適用しない
+      if (t) clearTimeout(t);
+      t = setTimeout(() => {
+        try {
+          applyKeywordHighlights({ skipFocused: true });
+        } catch {}
+      }, 180);
+    });
+    // フォーカス時はそのブロックのマークを一旦除去（編集しやすく）
+    document.addEventListener("focusin", (e) => {
+      if (
+        !(
+          e.target &&
+          e.target.classList &&
+          e.target.classList.contains("flow-block-text")
+        )
+      )
+        return;
+      clearMarks(e.target);
+    });
+    // 編集終了時（focusoutはバブリングする）にそのブロックのみ再適用
+    document.addEventListener("focusout", (e) => {
+      if (
+        !(
+          e.target &&
+          e.target.classList &&
+          e.target.classList.contains("flow-block-text")
+        )
+      )
+        return;
+      const el = e.target;
+      setTimeout(() => {
+        try {
+          applyKeywordHighlights({ onlyEl: el });
+        } catch {}
+      }, 0);
+    });
+  })();
   // flow-blockで矢印キー移動
   function onFlowBlockArrow(e) {
     if (!e.target.classList.contains("flow-block-text")) return;
@@ -738,6 +975,9 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   function makeLineInLayer(layer, x1, y1, x2, y2) {
+    const settings =
+      JSON.parse(localStorage.getItem(SETTINGS_KEY) || "null") || {};
+    const snapOrth = settings.snapOrth !== false; // default true
     const section = layer.closest && layer.closest(".flow-section");
     const isNeg = section && section.id === "negative-flow";
     const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
@@ -763,28 +1003,50 @@ document.addEventListener("DOMContentLoaded", () => {
     marker.innerHTML = `<polygon points="0 0, 10 3.5, 0 7" fill="currentColor" />`;
     defs.appendChild(marker);
     svg.appendChild(defs);
-    // 当たり判定用（広い・透明）
-    const hit = document.createElementNS("http://www.w3.org/2000/svg", "line");
-    hit.setAttribute("x1", x1);
-    hit.setAttribute("y1", y1);
-    hit.setAttribute("x2", x2);
-    hit.setAttribute("y2", y2);
-    hit.setAttribute("stroke", "rgba(0,0,0,0)");
-    hit.setAttribute("stroke-width", "14");
-    hit.setAttribute("stroke-linecap", "round");
-    hit.classList.add("hit");
-    // 表示用（細い・可視）
-    const vis = document.createElementNS("http://www.w3.org/2000/svg", "line");
-    vis.setAttribute("x1", x1);
-    vis.setAttribute("y1", y1);
-    vis.setAttribute("x2", x2);
-    vis.setAttribute("y2", y2);
-    // 色はCSSの currentColor を使用（テーマに追従）
-    vis.style.stroke = "currentColor";
-    vis.setAttribute("stroke-width", "2");
-    vis.setAttribute("marker-end", `url(#${markerId})`);
-    vis.setAttribute("stroke-linecap", "round");
-    vis.classList.add("vis");
+    // 当たり判定用/表示用
+    let hit, vis;
+    if (snapOrth) {
+      // 直角（エルボー）: M x1 y1 -> H -> V -> H ... のようなパス
+      const midX = (x1 + x2) / 2;
+      const d = `M ${x1} ${y1} H ${midX} V ${y2} H ${x2}`;
+      hit = document.createElementNS("http://www.w3.org/2000/svg", "path");
+      hit.setAttribute("d", d);
+      hit.setAttribute("fill", "none");
+      hit.setAttribute("stroke", "rgba(0,0,0,0)");
+      hit.setAttribute("stroke-width", "14");
+      hit.setAttribute("stroke-linecap", "round");
+      hit.setAttribute("stroke-linejoin", "round");
+      hit.classList.add("hit");
+      vis = document.createElementNS("http://www.w3.org/2000/svg", "path");
+      vis.setAttribute("d", d);
+      vis.setAttribute("fill", "none");
+      vis.style.stroke = "currentColor";
+      vis.setAttribute("stroke-width", "2");
+      vis.setAttribute("stroke-linecap", "round");
+      vis.setAttribute("stroke-linejoin", "round");
+      vis.setAttribute("marker-end", `url(#${markerId})`);
+      vis.classList.add("vis");
+    } else {
+      hit = document.createElementNS("http://www.w3.org/2000/svg", "line");
+      hit.setAttribute("x1", x1);
+      hit.setAttribute("y1", y1);
+      hit.setAttribute("x2", x2);
+      hit.setAttribute("y2", y2);
+      hit.setAttribute("stroke", "rgba(0,0,0,0)");
+      hit.setAttribute("stroke-width", "14");
+      hit.setAttribute("stroke-linecap", "round");
+      hit.classList.add("hit");
+      vis = document.createElementNS("http://www.w3.org/2000/svg", "line");
+      vis.setAttribute("x1", x1);
+      vis.setAttribute("y1", y1);
+      vis.setAttribute("x2", x2);
+      vis.setAttribute("y2", y2);
+      vis.style.stroke = "currentColor";
+      vis.setAttribute("stroke-width", "2");
+      vis.setAttribute("marker-end", `url(#${markerId})`);
+      vis.setAttribute("stroke-linecap", "round");
+      vis.classList.add("vis");
+    }
     svg.appendChild(hit);
     svg.appendChild(vis);
     // SVG自体はイベント無効、可視線も無効、当たり判定線のみ有効
@@ -860,12 +1122,70 @@ document.addEventListener("DOMContentLoaded", () => {
     const g = connectDrag.guideSvg;
     if (!g) return;
     const p = toLayerXY(connectDrag.layer, e.clientX, e.clientY);
-    g.querySelectorAll("line").forEach((line) => {
-      line.setAttribute("x1", s.x);
-      line.setAttribute("y1", s.y);
-      line.setAttribute("x2", p.x);
-      line.setAttribute("y2", p.y);
-    });
+    const settings =
+      JSON.parse(localStorage.getItem(SETTINGS_KEY) || "null") || {};
+    const snapOrth = settings.snapOrth !== false; // default true
+    const marker = g.querySelector("marker");
+    const markerId = marker ? marker.getAttribute("id") : "";
+    // 既存の可視/ヒット要素をクリアして描き直す
+    g.querySelectorAll("line, path").forEach((el) => el.remove());
+    if (snapOrth) {
+      const midX = (s.x + p.x) / 2;
+      const d = `M ${s.x} ${s.y} H ${midX} V ${p.y} H ${p.x}`;
+      const hit = document.createElementNS(
+        "http://www.w3.org/2000/svg",
+        "path"
+      );
+      hit.setAttribute("d", d);
+      hit.setAttribute("fill", "none");
+      hit.setAttribute("stroke", "rgba(0,0,0,0)");
+      hit.setAttribute("stroke-width", "14");
+      hit.setAttribute("stroke-linecap", "round");
+      hit.setAttribute("stroke-linejoin", "round");
+      hit.classList.add("hit");
+      const vis = document.createElementNS(
+        "http://www.w3.org/2000/svg",
+        "path"
+      );
+      vis.setAttribute("d", d);
+      vis.setAttribute("fill", "none");
+      vis.style.stroke = "currentColor";
+      vis.setAttribute("stroke-width", "2");
+      vis.setAttribute("stroke-linecap", "round");
+      vis.setAttribute("stroke-linejoin", "round");
+      if (markerId) vis.setAttribute("marker-end", `url(#${markerId})`);
+      vis.classList.add("vis");
+      g.appendChild(hit);
+      g.appendChild(vis);
+    } else {
+      const hit = document.createElementNS(
+        "http://www.w3.org/2000/svg",
+        "line"
+      );
+      hit.setAttribute("x1", s.x);
+      hit.setAttribute("y1", s.y);
+      hit.setAttribute("x2", p.x);
+      hit.setAttribute("y2", p.y);
+      hit.setAttribute("stroke", "rgba(0,0,0,0)");
+      hit.setAttribute("stroke-width", "14");
+      hit.setAttribute("stroke-linecap", "round");
+      hit.classList.add("hit");
+      const vis = document.createElementNS(
+        "http://www.w3.org/2000/svg",
+        "line"
+      );
+      vis.setAttribute("x1", s.x);
+      vis.setAttribute("y1", s.y);
+      vis.setAttribute("x2", p.x);
+      vis.setAttribute("y2", p.y);
+      vis.style.stroke = "currentColor";
+      vis.setAttribute("stroke-width", "2");
+      vis.setAttribute("stroke-linecap", "round");
+      if (markerId) vis.setAttribute("marker-end", `url(#${markerId})`);
+      vis.classList.add("vis");
+      g.appendChild(hit);
+      g.appendChild(vis);
+    }
     // ハイライト対象を更新
     const els = document.elementsFromPoint(e.clientX, e.clientY) || [];
     let candidate = null;
@@ -1408,6 +1728,165 @@ document.addEventListener("DOMContentLoaded", () => {
     render();
   })();
   // ===== DFSF エクスポート/インポート =====
+  // DFSF 安全化: 最低限のHTMLサニタイズとスキーマ検証
+  function sanitizeHtml(html) {
+    try {
+      if (typeof html !== "string") return "";
+      const template = document.createElement("template");
+      template.innerHTML = html;
+      const allowed = new Set([
+        "B",
+        "I",
+        "U",
+        "STRONG",
+        "EM",
+        "S",
+        "MARK",
+        "SUP",
+        "SUB",
+        "BR",
+        "A",
+        "UL",
+        "OL",
+        "LI",
+        "P",
+        "DIV",
+        "SPAN",
+      ]);
+      Array.from(template.content.querySelectorAll("*")).forEach((el) => {
+        if (!allowed.has(el.tagName)) {
+          const text = document.createTextNode(el.textContent || "");
+          el.replaceWith(text);
+          return;
+        }
+        // 危険な属性やスキームを除去
+        for (const name of el.getAttributeNames()) {
+          const lower = name.toLowerCase();
+          if (
+            lower.startsWith("on") ||
+            lower === "style" ||
+            lower === "srcdoc"
+          ) {
+            el.removeAttribute(name);
+            continue;
+          }
+          if (el.tagName === "A" && lower === "href") {
+            const href = el.getAttribute(name) || "";
+            const ok = /^(https?:|mailto:|tel:|#|\/)/i.test(href);
+            if (!ok || /^\s*javascript:/i.test(href)) el.removeAttribute(name);
+            continue;
+          }
+          if (
+            el.tagName !== "A" &&
+            (lower === "href" || lower === "target" || lower === "rel")
+          ) {
+            el.removeAttribute(name);
+          }
+        }
+        if (el.tagName === "A") {
+          // 常に安全なrelを付与
+          el.setAttribute("rel", "noopener noreferrer nofollow");
+        }
+      });
+      return template.innerHTML;
+    } catch {
+      return String(html || "");
+    }
+  }
+
+  function validateDfsfSnapshot(raw) {
+    if (!raw || typeof raw !== "object")
+      throw new Error("DFSFの形式が不正です");
+    const out = {
+      version: 1,
+      meta: raw.meta && typeof raw.meta === "object" ? raw.meta : {},
+      sheet: {},
+      parts: [],
+      scores: Array.isArray(raw.scores)
+        ? raw.scores.map((v) => (typeof v === "string" ? v : ""))
+        : [],
+      connections: { affirmative: [], negative: [] },
+      settings: {},
+    };
+    // version（将来互換のため未指定や異なる場合も許容）
+    if (typeof raw.version === "number") out.version = raw.version;
+    // sheet
+    const s = raw.sheet && typeof raw.sheet === "object" ? raw.sheet : {};
+    const sheetKeys = [
+      "topic",
+      "date",
+      "tournament",
+      "place",
+      "teamAff",
+      "teamNeg",
+    ];
+    sheetKeys.forEach((k) => {
+      out.sheet[k] = typeof s[k] === "string" ? s[k] : "";
+    });
+    // parts
+    if (!Array.isArray(raw.parts)) throw new Error("DFSFのpartsが不正です");
+    const idRegex = /^[A-Za-z0-9_-]{1,64}$/;
+    const idSet = new Set();
+    out.parts = raw.parts.map((col) => {
+      if (!Array.isArray(col)) return [];
+      return col.map((item) => {
+        let html = "";
+        let id = null;
+        if (item && typeof item === "object") {
+          if (typeof item.html === "string") html = item.html;
+          if (typeof item.id === "string" && idRegex.test(item.id)) {
+            id = item.id;
+            if (idSet.has(id))
+              id = null; // 重複IDは無効化（再採番はcreateFlowBlockに任せる）
+            else idSet.add(id);
+          }
+        } else if (typeof item === "string") {
+          html = item;
+        }
+        return { id, html: sanitizeHtml(html) };
+      });
+    });
+    // connections（参照が存在するもののみ）
+    const rawCon =
+      raw.connections && typeof raw.connections === "object"
+        ? raw.connections
+        : {};
+    ["affirmative", "negative"].forEach((key) => {
+      const arr = Array.isArray(rawCon[key]) ? rawCon[key] : [];
+      out.connections[key] = arr
+        .filter(
+          (c) =>
+            c &&
+            typeof c === "object" &&
+            typeof c.from === "string" &&
+            typeof c.to === "string" &&
+            idRegex.test(c.from) &&
+            idRegex.test(c.to) &&
+            idSet.has(c.from) &&
+            idSet.has(c.to)
+        )
+        .map((c) => ({ from: c.from, to: c.to }));
+    });
+    // settings（既知キーのみ）
+    const rawSettings =
+      raw.settings && typeof raw.settings === "object" ? raw.settings : {};
+    const fontSizes = new Set(["", "large", "xlarge"]);
+    const lineHeights = new Set(["", "relaxed", "loose"]);
+    const themes = new Set(["system", "light", "dark"]);
+    out.settings = {
+      fontSize: fontSizes.has(rawSettings.fontSize) ? rawSettings.fontSize : "",
+      lineHeight: lineHeights.has(rawSettings.lineHeight)
+        ? rawSettings.lineHeight
+        : "",
+      theme: themes.has(rawSettings.theme)
+        ? rawSettings.theme
+        : rawSettings.theme
+        ? "system"
+        : "system",
+    };
+    return out;
+  }
+
   function collectSnapshot() {
     // saveAllがlocalStorageに保存するが、ここでは直接オブジェクトを構築
     const snapshot = {
@@ -1456,6 +1935,67 @@ document.addEventListener("DOMContentLoaded", () => {
     return snapshot;
   }
 
+  // 直前バックアップ保存/復元
+  function backupCurrentSnapshot() {
+    try {
+      const snap = collectSnapshot();
+      const entry = { ts: Date.now(), snapshot: snap };
+      localStorage.setItem(BACKUP_KEY, JSON.stringify(entry));
+      updateRestoreBtnDisabled();
+    } catch {}
+  }
+  function getLastBackup() {
+    try {
+      const raw = JSON.parse(localStorage.getItem(BACKUP_KEY) || "null");
+      if (raw && raw.snapshot) return raw;
+    } catch {}
+    return null;
+  }
+  function restoreLastBackup() {
+    const b = getLastBackup();
+    if (!b) {
+      alert("復元できるバックアップがありません。");
+      return;
+    }
+    if (
+      !confirm(
+        "直前のバックアップに復元します。現在の内容は失われます。よろしいですか？"
+      )
+    )
+      return;
+    try {
+      applySnapshot(validateDfsfSnapshot(b.snapshot));
+      alert("直前のバックアップを復元しました。");
+    } catch (e) {
+      console.error(e);
+      alert("復元に失敗しました。");
+    }
+  }
+  function ensureRestoreButton() {
+    const importBtn = document.getElementById("import-dfsf-btn");
+    if (!importBtn) return;
+    const parent = importBtn.parentElement || document.body;
+    if (document.getElementById("restore-last-backup-btn")) return;
+    const btn = document.createElement("button");
+    btn.id = "restore-last-backup-btn";
+    btn.className = "download-btn";
+    btn.textContent = "直前に戻す";
+    btn.style.marginLeft = "8px";
+    btn.addEventListener("click", restoreLastBackup);
+    parent.insertBefore(btn, importBtn.nextSibling);
+    updateRestoreBtnDisabled();
+  }
+  function updateRestoreBtnDisabled() {
+    const btn = document.getElementById("restore-last-backup-btn");
+    if (!btn) return;
+    const has = !!getLastBackup();
+    btn.disabled = !has;
+    btn.style.opacity = has ? "" : "0.6";
+    btn.title = has
+      ? "直前のバックアップに復元"
+      : "復元できるバックアップがありません";
+  }
+
   function applySnapshot(snap) {
     if (!snap || typeof snap !== "object") throw new Error("Invalid snapshot");
     // フィールド
@@ -1479,7 +2019,7 @@ document.addEventListener("DOMContentLoaded", () => {
         if (!wrap) return;
         wrap.innerHTML = "";
         items.forEach((it) => {
-          const b = createFlowBlock(it && it.html ? it.html : "");
+          const b = createFlowBlock(sanitizeHtml(it && it.html ? it.html : ""));
           if (it && it.id) b.dataset.blockId = it.id; // ID復元
           wrap.appendChild(b);
         });
@@ -1521,6 +2061,10 @@ document.addEventListener("DOMContentLoaded", () => {
     setTimeout(() => restoreConnections(conns), 0);
     // 最後に全体保存
     saveAll();
+    // キーワードハイライト再適用
+    try {
+      applyKeywordHighlights();
+    } catch {}
   }
 
   // エクスポート
@@ -1550,59 +2094,459 @@ document.addEventListener("DOMContentLoaded", () => {
     importBtn.addEventListener("click", () => {
       importInput && importInput.click();
     });
+  // 復元ボタンをUIに追加
+  ensureRestoreButton();
   importInput &&
     importInput.addEventListener("change", async (e) => {
       const file = e.target.files && e.target.files[0];
       if (!file) return;
+      // サイズ/拡張子チェック
+      const lowerName = (file.name || "").toLowerCase();
+      if (!(lowerName.endsWith(".dfsf") || lowerName.endsWith(".json"))) {
+        alert(".dfsf または .json ファイルを選択してください。");
+        e.target.value = "";
+        return;
+      }
+      if (file.size > MAX_IMPORT_SIZE) {
+        alert("ファイルが大きすぎます。5MB以下のファイルを選択してください。");
+        e.target.value = "";
+        return;
+      }
       try {
         const text = await file.text();
         const cleaned = text.replace(/^\uFEFF/, ""); // 先頭BOMを除去
         const json = JSON.parse(cleaned);
-        applySnapshot(json);
+        const validated = validateDfsfSnapshot(json);
+        // インポート概要
+        const rawConnCount =
+          ((json.connections && json.connections.affirmative?.length) || 0) +
+          ((json.connections && json.connections.negative?.length) || 0);
+        const valConnCount =
+          validated.connections.affirmative.length +
+          validated.connections.negative.length;
+        const partsCount = Array.isArray(validated.parts)
+          ? validated.parts.length
+          : 0;
+        const blocksCount = Array.isArray(validated.parts)
+          ? validated.parts.reduce(
+              (n, col) => n + (Array.isArray(col) ? col.length : 0),
+              0
+            )
+          : 0;
+        const ignored = Math.max(0, rawConnCount - valConnCount);
+        const ok = confirm(
+          `読み込む内容の概要:\n- 列: ${partsCount}\n- ブロック: ${blocksCount}\n- 接続: ${valConnCount}${
+            ignored ? ` (無視: ${ignored})` : ""
+          }\n\n現在の内容は上書きされます。続行しますか？`
+        );
+        if (!ok) return;
+        // 現在の状態をバックアップ
+        backupCurrentSnapshot();
+        applySnapshot(validated);
+        alert("読み込みが完了しました。");
       } catch (err) {
-        alert("読み込みに失敗しました。ファイル形式をご確認ください。");
+        const msg =
+          err && err.message
+            ? `読み込みに失敗しました: ${err.message}`
+            : "読み込みに失敗しました。ファイル形式をご確認ください。";
+        alert(msg);
         console.error(err);
       } finally {
         e.target.value = "";
       }
     });
-  // フローをtxtでダウンロード（Aff/Neg両方をまとめて）
-  document.getElementById("download-flow-btn").addEventListener("click", () => {
-    function buildFlowText(sectionEl, sectionLabel) {
-      const cols = Array.from(
-        sectionEl.querySelectorAll(".flow-col")
-      ).reverse();
-      let out = `=== ${sectionLabel} ===\n`;
-      cols.forEach((col) => {
-        const title = (
-          col.querySelector(".col-title")?.innerText || ""
-        ).replace(/\n/g, " ");
-        const blocks = Array.from(
-          col.querySelectorAll(".flow-block .flow-block-text")
-        );
-        const lines = blocks
-          .map((b) => b.innerText.trim())
-          .filter((t) => t.length > 0);
-        out += `【${title}】\n${lines.join("\n")}\n\n`;
-      });
-      return out;
+
+  // --- 共有リンク生成/読込 ---
+  (function setupShareLink() {
+    const btn = document.getElementById("share-link-btn");
+    async function buildUrlFromCurrent() {
+      const snap = collectSnapshot();
+      const text = JSON.stringify(snap);
+      // 圧縮優先、失敗時は通常Base64
+      const comp = await compressToU8(text);
+      let hash = "";
+      if (comp && comp.length) {
+        hash = "fsz=" + b64UrlEncode(comp);
+      } else {
+        hash = "fs=" + jsonToBase64(snap);
+      }
+      const base = location.href.replace(/#.*/, "");
+      const url = base + "#" + hash;
+      return url;
     }
-    let txt = "";
-    txt += buildFlowText(affFlow, "肯定側");
-    txt += buildFlowText(negFlow, "否定側");
-    const filename = "flows.txt";
-    const bom = "\uFEFF"; // UTF-8 BOM
-    const blob = new Blob([bom, txt], { type: "text/plain;charset=utf-8" });
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    setTimeout(() => {
-      document.body.removeChild(a);
-      URL.revokeObjectURL(a.href);
-    }, 100);
-  });
+    async function copyShareLink() {
+      try {
+        const url = await buildUrlFromCurrent();
+        const btnEl = document.getElementById("share-link-btn");
+        let copied = false;
+        if (
+          window.isSecureContext &&
+          navigator.clipboard &&
+          navigator.clipboard.writeText
+        ) {
+          try {
+            await navigator.clipboard.writeText(url);
+            copied = true;
+          } catch {}
+        }
+        if (!copied) {
+          // レガシーコピー
+          try {
+            const ta = document.createElement("textarea");
+            ta.value = url;
+            ta.setAttribute("readonly", "");
+            ta.style.position = "fixed";
+            ta.style.top = "-1000px";
+            document.body.appendChild(ta);
+            ta.select();
+            copied = document.execCommand("copy");
+            document.body.removeChild(ta);
+          } catch {}
+        }
+        if (!copied) {
+          // 最後の手段: ユーザーに手動コピーしてもらう
+          prompt("以下のURLをコピーしてください:", url);
+        }
+        // フィードバック
+        if (btnEl) {
+          const prev = btnEl.textContent;
+          btnEl.textContent = copied ? "コピーしました" : "URLを表示しました";
+          btnEl.disabled = true;
+          setTimeout(() => {
+            btnEl.textContent = prev;
+            btnEl.disabled = false;
+          }, 1600);
+        } else {
+          alert(
+            copied ? "共有リンクをコピーしました" : "共有リンクを表示しました"
+          );
+        }
+      } catch (e) {
+        console.error(e);
+        alert("共有リンクの作成に失敗しました");
+      }
+    }
+    btn && btn.addEventListener("click", copyShareLink);
+
+    // ページ読み込み時にハッシュがあれば読込
+    (async function importFromHash() {
+      const h = location.hash.replace(/^#/, "");
+      if (!h) return;
+      try {
+        let json = null;
+        if (h.startsWith("fsz=")) {
+          const b64 = h.slice(4);
+          const u8 = b64UrlDecodeToU8(b64);
+          const text = await decompressToText(u8);
+          if (text) json = JSON.parse(text);
+        } else if (h.startsWith("fs=")) {
+          const b64 = h.slice(3);
+          json = base64ToJson(b64);
+        }
+        if (json) {
+          const validated = validateDfsfSnapshot(json);
+          const ok = confirm(
+            "共有リンクの内容を読み込みます。現在の内容は上書きされます。続行しますか？"
+          );
+          if (!ok) return;
+          backupCurrentSnapshot();
+          applySnapshot(validated);
+          // 読み込んだらハッシュをクリーンアップ（履歴は残さない）
+          history.replaceState(null, "", location.pathname + location.search);
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    })();
+  })();
+  // フローをtxtでダウンロード（Aff/Neg両方をまとめて）
+  function buildFlowText(sectionEl, sectionLabel) {
+    const cols = Array.from(sectionEl.querySelectorAll(".flow-col")).reverse();
+    let out = `=== ${sectionLabel} ===\n`;
+    cols.forEach((col) => {
+      const title = (col.querySelector(".col-title")?.innerText || "").replace(
+        /\n/g,
+        " "
+      );
+      const blocks = Array.from(
+        col.querySelectorAll(".flow-block .flow-block-text")
+      );
+      const lines = blocks
+        .map((b) => b.innerText.trim())
+        .filter((t) => t.length > 0);
+      out += `【${title}】\n${lines.join("\n")}\n\n`;
+    });
+    return out;
+  }
+  const oldTxtBtn = document.getElementById("download-flow-btn");
+  if (oldTxtBtn) {
+    oldTxtBtn.addEventListener("click", () => {
+      let txt = "";
+      txt += buildFlowText(affFlow, "肯定側");
+      txt += buildFlowText(negFlow, "否定側");
+      const filename = "flows.txt";
+      const bom = "\uFEFF"; // UTF-8 BOM
+      const blob = new Blob([bom, txt], { type: "text/plain;charset=utf-8" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(() => {
+        document.body.removeChild(a);
+        URL.revokeObjectURL(a.href);
+      }, 100);
+    });
+  }
+
+  // 追加出力: Markdown / Scores CSV / Print
+  (function setupExtraExports() {
+    // ヘルパーを外出しし、複数メニューから再利用
+    function gatherFlowsAsMarkdown() {
+      function sectionToMd(sectionEl, sectionLabel) {
+        const cols = Array.from(
+          sectionEl.querySelectorAll(".flow-col")
+        ).reverse();
+        let out = `# ${sectionLabel}\n`;
+        cols.forEach((col) => {
+          const title = (
+            col.querySelector(".col-title")?.innerText || ""
+          ).replace(/\n/g, " ");
+          const blocks = Array.from(
+            col.querySelectorAll(".flow-block .flow-block-text")
+          );
+          const lines = blocks
+            .map((b) => b.innerText.trim())
+            .filter((t) => t.length > 0);
+          out += `\n## ${title}\n`;
+          lines.forEach((l) => {
+            out += `- ${l}\n`;
+          });
+        });
+        return out;
+      }
+      const meta = {
+        topic: document.querySelector(".sheet-topic")?.value || "",
+        date: document.querySelector(".sheet-date")?.value || "",
+        tournament: document.querySelector(".sheet-tournament")?.value || "",
+        place: document.querySelector(".sheet-place")?.value || "",
+        teamAff: document.querySelector(".sheet-team-affirmative")?.value || "",
+        teamNeg: document.querySelector(".sheet-team-negative")?.value || "",
+      };
+      let md = `# ディベート・フローシート レポート\n\n`;
+      md += `- 論題: ${meta.topic}\n`;
+      md += `- 日付: ${meta.date}\n`;
+      md += `- 大会: ${meta.tournament}\n`;
+      md += `- 会場: ${meta.place}\n`;
+      md += `- 肯定側: ${meta.teamAff}\n`;
+      md += `- 否定側: ${meta.teamNeg}\n`;
+      md += `\n---\n\n`;
+      md += sectionToMd(document.getElementById("affirmative-flow"), "肯定側");
+      md += `\n---\n\n`;
+      md += sectionToMd(document.getElementById("negative-flow"), "否定側");
+      // スコア
+      const table = document.querySelector(".score-table");
+      if (table) {
+        md += `\n---\n\n# スコア\n\n`;
+        const rows = Array.from(table.tBodies[0]?.rows || []);
+        md += `| 役割 | 肯定側 | 否定側 |\n|---|---:|---:|\n`;
+        rows.forEach((r) => {
+          const label = (r.cells[0]?.innerText || "").trim();
+          const aff = (r.cells[1]?.innerText || "").trim();
+          const neg = (r.cells[2]?.innerText || "").trim();
+          md += `| ${label} | ${aff} | ${neg} |\n`;
+        });
+      }
+      return md;
+    }
+
+    function gatherScoresCsv() {
+      const table = document.querySelector(".score-table");
+      let csv = "役割,肯定側,否定側\r\n";
+      if (table) {
+        const rows = Array.from(table.tBodies[0]?.rows || []);
+        rows.forEach((r) => {
+          const label = (r.cells[0]?.innerText || "")
+            .trim()
+            .replaceAll('"', '""');
+          const aff = (r.cells[1]?.innerText || "")
+            .trim()
+            .replaceAll('"', '""');
+          const neg = (r.cells[2]?.innerText || "")
+            .trim()
+            .replaceAll('"', '""');
+          csv += `"${label}","${aff}","${neg}"\r\n`;
+        });
+      }
+      return csv;
+    }
+
+    function downloadBlob(text, filename, mime) {
+      const bom = "\uFEFF";
+      const blob = new Blob([bom, text], { type: `${mime};charset=utf-8` });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(() => {
+        document.body.removeChild(a);
+        URL.revokeObjectURL(a.href);
+      }, 100);
+    }
+
+    // 旧個別ボタンが存在した場合はそのまま動作
+    const btnMd = document.getElementById("export-md-btn");
+    const btnCsv = document.getElementById("export-scores-csv-btn");
+    const btnPrint = document.getElementById("print-report-btn");
+    if (btnMd)
+      btnMd.addEventListener("click", () => {
+        const md = gatherFlowsAsMarkdown();
+        const name = `flowsheet_${new Date().toISOString().slice(0, 10)}.md`;
+        downloadBlob(md, name, "text/markdown");
+      });
+    if (btnCsv)
+      btnCsv.addEventListener("click", () => {
+        const csv = gatherScoresCsv();
+        const name = `scores_${new Date().toISOString().slice(0, 10)}.csv`;
+        downloadBlob(csv, name, "text/csv");
+      });
+    if (btnPrint)
+      btnPrint.addEventListener("click", () => {
+        window.print();
+      });
+
+    // 新しい統合メニューボタン
+    const btnFlowMenu = document.getElementById("export-flow-menu-btn");
+    const btnScoreMenu = document.getElementById("export-score-menu-btn");
+
+    function showMenu(buttonEl, items) {
+      // 既存メニューを閉じる
+      document.querySelectorAll(".popup-menu").forEach((m) => m.remove());
+      const menu = document.createElement("div");
+      menu.className = "popup-menu";
+      menu.style.position = "absolute";
+      menu.style.zIndex = "1000";
+      const r = buttonEl.getBoundingClientRect();
+      menu.style.left = `${r.left + window.scrollX}px`;
+      menu.style.top = `${r.bottom + window.scrollY + 6}px`;
+      menu.style.background =
+        getComputedStyle(document.documentElement)
+          .getPropertyValue("--panel")
+          .trim() || "#fff";
+      const muted =
+        getComputedStyle(document.documentElement)
+          .getPropertyValue("--muted")
+          .trim() || "#ccc";
+      menu.style.border = `1px solid ${muted}`;
+      menu.style.boxShadow = "0 4px 12px var(--shadow)";
+      menu.style.borderRadius = "6px";
+      menu.style.minWidth = "220px";
+      menu.style.fontSize = "14px";
+      items.forEach((it) => {
+        const a = document.createElement("button");
+        a.type = "button";
+        a.textContent = it.label;
+        a.style.display = "block";
+        a.style.width = "100%";
+        a.style.padding = "10px 12px";
+        a.style.textAlign = "left";
+        a.style.background = "transparent";
+        a.style.border = "none";
+        a.style.cursor = "pointer";
+        a.addEventListener("click", () => {
+          it.onClick();
+          menu.remove();
+        });
+        a.addEventListener(
+          "mouseenter",
+          () =>
+            (a.style.background =
+              "color-mix(in oklab, var(--text) 8%, transparent)")
+        );
+        a.addEventListener(
+          "mouseleave",
+          () => (a.style.background = "transparent")
+        );
+        menu.appendChild(a);
+      });
+      document.body.appendChild(menu);
+      const onDoc = (ev) => {
+        if (!menu.contains(ev.target) && ev.target !== buttonEl) {
+          menu.remove();
+          document.removeEventListener("mousedown", onDoc);
+          window.removeEventListener("resize", onDoc);
+          window.removeEventListener("scroll", onDoc, true);
+        }
+      };
+      setTimeout(() => {
+        document.addEventListener("mousedown", onDoc);
+        window.addEventListener("resize", onDoc);
+        window.addEventListener("scroll", onDoc, true);
+      }, 0);
+    }
+
+    btnFlowMenu &&
+      btnFlowMenu.addEventListener("click", (e) => {
+        const target = e.currentTarget;
+        showMenu(target, [
+          {
+            label: "フローをテキストでダウンロード (.txt)",
+            onClick: () => {
+              let txt = "";
+              txt += buildFlowText(affFlow, "肯定側");
+              txt += buildFlowText(negFlow, "否定側");
+              const bom = "\uFEFF";
+              const blob = new Blob([bom, txt], {
+                type: "text/plain;charset=utf-8",
+              });
+              const a = document.createElement("a");
+              a.href = URL.createObjectURL(blob);
+              a.download = `flows.txt`;
+              document.body.appendChild(a);
+              a.click();
+              setTimeout(() => {
+                document.body.removeChild(a);
+                URL.revokeObjectURL(a.href);
+              }, 100);
+            },
+          },
+          {
+            label: "レポートをMarkdownで保存 (.md)",
+            onClick: () => {
+              const md = gatherFlowsAsMarkdown();
+              const name = `flowsheet_${new Date()
+                .toISOString()
+                .slice(0, 10)}.md`;
+              downloadBlob(md, name, "text/markdown");
+            },
+          },
+        ]);
+      });
+
+    btnScoreMenu &&
+      btnScoreMenu.addEventListener("click", (e) => {
+        const target = e.currentTarget;
+        showMenu(target, [
+          {
+            label: "スコアをCSVで保存 (.csv)",
+            onClick: () => {
+              const csv = gatherScoresCsv();
+              const name = `scores_${new Date()
+                .toISOString()
+                .slice(0, 10)}.csv`;
+              downloadBlob(csv, name, "text/csv");
+            },
+          },
+          {
+            label: "印刷 / PDF 保存",
+            onClick: () => {
+              window.print();
+            },
+          },
+        ]);
+      });
+  })();
   // 文字起こし（Chrome Web Speech API）
   (function setupTranscribe() {
     const area = document.getElementById("transcribe-text");
@@ -1693,5 +2637,102 @@ document.addEventListener("DOMContentLoaded", () => {
   (function setCopyright() {
     const y = document.getElementById("copyright-year");
     if (y) y.textContent = String(new Date().getFullYear());
+  })();
+
+  // ===== 検索 =====
+  (function setupSearch() {
+    const inp = document.getElementById("search-query");
+    const btnPrev = document.getElementById("search-prev");
+    const btnNext = document.getElementById("search-next");
+    const btnClear = document.getElementById("search-clear");
+    const status = document.getElementById("search-status");
+    if (!inp || !btnPrev || !btnNext || !btnClear || !status) return;
+
+    let hits = [];
+    let idx = -1;
+
+    function clearMarks() {
+      document.querySelectorAll(".mark-hit").forEach((el) => {
+        el.classList.remove("mark-hit", "current");
+      });
+    }
+
+    function updateStatus() {
+      status.textContent = hits.length ? `${idx + 1}/${hits.length}` : "0/0";
+    }
+
+    function collectHits(q) {
+      clearMarks();
+      hits = [];
+      idx = -1;
+      if (!q) {
+        updateStatus();
+        return;
+      }
+      const needle = q.toLowerCase();
+      const blocks = document.querySelectorAll(".flow-block .flow-block-text");
+      blocks.forEach((b) => {
+        const text = (b.innerText || "").toLowerCase();
+        if (!text.includes(needle)) return;
+        const sel = window.getSelection();
+        sel.removeAllRanges();
+        // 粗いマーク: 単にブロック全体にクラスを付ける（パフォーマンスと簡潔さ優先）
+        b.classList.add("mark-hit");
+        hits.push(b);
+      });
+      if (hits.length) {
+        idx = 0;
+        hits[0].classList.add("current");
+        scrollIntoView(hits[0]);
+      }
+      updateStatus();
+    }
+
+    function scrollIntoView(el) {
+      const r = el.getBoundingClientRect();
+      const top = r.top + window.scrollY - 80; // ヘッダー分オフセット
+      window.scrollTo({ top, behavior: "smooth" });
+    }
+
+    function move(delta) {
+      if (!hits.length) return;
+      hits[idx]?.classList.remove("current");
+      idx = (idx + delta + hits.length) % hits.length;
+      const el = hits[idx];
+      el.classList.add("current");
+      scrollIntoView(el);
+      updateStatus();
+    }
+
+    function clearAll() {
+      inp.value = "";
+      clearMarks();
+      hits = [];
+      idx = -1;
+      updateStatus();
+      inp.focus();
+    }
+
+    inp.addEventListener("input", () => collectHits(inp.value.trim()));
+    btnNext.addEventListener("click", () => move(1));
+    btnPrev.addEventListener("click", () => move(-1));
+    btnClear.addEventListener("click", clearAll);
+
+    // Enter/Shift+Enterで移動
+    inp.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        if (e.shiftKey) move(-1);
+        else move(1);
+      }
+    });
+    // Alt+Fで検索フォーカス
+    document.addEventListener("keydown", (e) => {
+      if (e.altKey && (e.key === "f" || e.key === "F")) {
+        e.preventDefault();
+        inp.focus();
+        inp.select();
+      }
+    });
   })();
 });

@@ -6,7 +6,11 @@
     <meta name="theme-color" content="#3b5998" />
     <title>ディベート・フローシート</title>
     <link rel="stylesheet" href="style.css" />
-    <link rel="shortcut icon" href="/icons/icon-192.png" type="image/x-icon" />
+    <link
+      rel="shortcut icon"
+      href="FlowSheet/icons/icon-192.png"
+      type="image/x-icon"
+    />
     <link rel="manifest" href="manifest.webmanifest" />
   </head>
   <body>
@@ -14,8 +18,15 @@
       <header>
         <h1>フローシート</h1>
         <div style="text-align: right; margin: 0 2vw 10px 0">
-          <button id="download-flow-btn" class="download-btn">
-            フローをテキストでダウンロード
+          <button id="export-flow-menu-btn" class="download-btn">
+            出力: フロー
+          </button>
+          <button
+            id="export-score-menu-btn"
+            class="download-btn"
+            style="margin-left: 8px"
+          >
+            出力: スコア/印刷
           </button>
           <button
             id="clear-flow-btn"
@@ -38,12 +49,47 @@
           >
             読み込み(.dfsf)
           </button>
+          <button
+            id="share-link-btn"
+            class="download-btn"
+            style="margin-left: 8px; background: #8e44ad"
+            title="現在の内容をURLに埋め込んで共有用リンクをコピー"
+          >
+            共有リンクをコピー
+          </button>
           <input
             id="import-dfsf-input"
             type="file"
             accept=".dfsf,application/json"
             style="display: none"
           />
+        </div>
+        <div
+          class="search-bar"
+          role="search"
+          aria-label="フロー検索"
+          style="margin: 0 2vw 12px 2vw"
+        >
+          <input
+            id="search-query"
+            type="text"
+            placeholder="検索（Alt+F）"
+            aria-label="検索語"
+          />
+          <button
+            id="search-prev"
+            class="search-btn"
+            title="前へ (Shift+Enter)"
+          >
+            ↑
+          </button>
+          <button id="search-next" class="search-btn" title="次へ (Enter)">
+            ↓
+          </button>
+          <span id="search-status" class="search-status" aria-live="polite"
+            >0/0</span
+          >
+          <button id="search-clear" class="search-btn" title="クリア">✕</button>
         </div>
         <div class="switch-wrap">
           <button id="switch-to-affirmative" class="switch-btn active">
@@ -159,9 +205,9 @@
                 >
                   <option value="180000">3:00</option>
                   <option value="240000">4:00</option>
-                  <option value="300000" selected>6:00</option>
-                  <option value="360000">1:00</option>
-                  <option value="480000">2:00</option>
+                  <option value="360000" selected>6:00</option>
+                  <option value="60000">1:00</option>
+                  <option value="120000">2:00</option>
                 </select>
                 <label class="timer-toggle">
                   <input type="checkbox" id="timer-countdown" checked />
@@ -261,6 +307,27 @@
                 <option value="light">ライト</option>
                 <option value="dark">ダーク</option>
               </select>
+            </label>
+            <label class="settings-row">
+              <span>ハイライトキーワード</span>
+              <input
+                id="setting-highlight-keywords"
+                type="text"
+                placeholder="例: 重要, 反論, 証拠"
+              />
+            </label>
+            <label class="settings-row">
+              <span>大文字小文字</span>
+              <label>
+                <input type="checkbox" id="setting-highlight-case-sensitive" />
+                区別する
+              </label>
+            </label>
+            <label class="settings-row">
+              <span>スナップ整列（矢印を直角に）</span>
+              <label>
+                <input type="checkbox" id="setting-snap-orth" checked /> 有効
+              </label>
             </label>
           </div>
           <div class="settings-modal-footer">

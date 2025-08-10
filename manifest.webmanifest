@@ -9,7 +9,7 @@
   "description": "ディベート用のフロー作成・記録ツール。オフラインでも動作。",
   "icons": [
     {
-      "src": "FlowSheet/icons/icon-192.png",
+      "src": "icons/icon-192.png",
       "sizes": "192x192",
       "type": "image/png"
     },

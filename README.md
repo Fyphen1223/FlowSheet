@@ -1,6 +1,6 @@
 # FlowSheet
 
-No more paperwork. Just do it online. By a debator, for debators.
+No more paperwork. Just do it online. By a debater, for debaters.
 
 ## オフライン対応 (PWA)
 

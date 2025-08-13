@@ -1,5 +1,5 @@
 /* FlowSheet Service Worker - offline cache */
-const CACHE_NAME = "flowsheet-cache-v1";
+const CACHE_NAME = "flowsheet-cache-v3";
 const CORE_ASSETS = [
   "./",
   "./index.html",

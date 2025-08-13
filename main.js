@@ -1,24 +1,15 @@
-// FlowSheet main.js
-// 必要に応じて将来的に機能追加可能
-// 例: 入力内容の保存や矢印描画など
-
-// ここでは最低限の初期化のみ
-
 document.addEventListener("DOMContentLoaded", () => {
-  // PWA: Service Worker registration
   if ("serviceWorker" in navigator) {
     window.addEventListener("load", () => {
       navigator.serviceWorker.register("./service-worker.js").catch(() => {});
     });
   }
-  // localStorage keys
   const STORAGE_KEY = "flowsheet-autosave-v1";
   const SETTINGS_KEY = "flowsheet-settings-v1";
   const THEME_KEY = SETTINGS_KEY; // 同一オブジェクトで管理（fontSize, lineHeight, theme）
   const BACKUP_KEY = "flowsheet-last-backup-v1";
   const MAX_IMPORT_SIZE = 5 * 1024 * 1024; // 5MB 上限
 
-  // --- 共有リンク用ユーティリティ（URL-safe Base64, 圧縮は任意） ---
   function b64UrlEncode(u8) {
     let str = "";
     for (let i = 0; i < u8.length; i++) str += String.fromCharCode(u8[i]);
@@ -33,7 +24,6 @@ document.addEventListener("DOMContentLoaded", () => {
     return u8;
   }
   async function compressToU8(text) {
-    // CompressionStreamがあればdeflate、無ければnull
     try {
       if (window.CompressionStream) {
         const cs = new CompressionStream("deflate-raw");
@@ -144,7 +134,17 @@ document.addEventListener("DOMContentLoaded", () => {
         const text = document.createElement("div");
         text.className = "flow-block-text";
         text.contentEditable = "true";
-        text.innerHTML = html;
+        // 不正に混入したドラッグボタン等を除去してから移行
+        try {
+          const tmp = document.createElement("div");
+          tmp.innerHTML = html;
+          tmp
+            .querySelectorAll(".drag-connect-btn")
+            .forEach((el) => el.remove());
+          text.innerHTML = tmp.innerHTML;
+        } catch {
+          text.innerHTML = html;
+        }
         const reorderBtn = createReorderButton();
         reorderBtn.addEventListener("mousedown", onReorderHandleDown);
         const btn = createDragButton();
@@ -160,6 +160,12 @@ document.addEventListener("DOMContentLoaded", () => {
         const first = b.firstChild;
         b.insertBefore(reorderBtn, first);
       }
+      // 念のため、テキスト内に紛れ込んだドラッグボタンをクリーン
+      try {
+        b.querySelectorAll(".flow-block-text .drag-connect-btn").forEach((el) =>
+          el.remove()
+        );
+      } catch {}
     });
   }
   // フロー全削除ボタン
@@ -348,6 +354,12 @@ document.addEventListener("DOMContentLoaded", () => {
       applyTheme(s.theme || "system");
       // 初期ハイライト適用
       applyKeywordHighlights();
+      // 初期カラム幅適用
+      applyColumnWidthSettings(s);
+      // 既存スクロールコンテナにUXを付与
+      document
+        .querySelectorAll(".flow-scroll")
+        .forEach((el) => hookScrollUX(el));
     } else {
       applyTheme("system");
     }
@@ -366,6 +378,15 @@ document.addEventListener("DOMContentLoaded", () => {
   const chkSnapOrth = document.getElementById("setting-snap-orth");
   const inpHl = document.getElementById("setting-highlight-keywords");
   const chkHlCase = document.getElementById("setting-highlight-case-sensitive");
+  const selColMode = document.getElementById("setting-col-width-mode");
+  const inpColFixed = document.getElementById("setting-col-fixed-width");
+  const rowColFixed = document.getElementById("row-col-fixed-width");
+  const selBeepMode = document.getElementById("setting-timer-beep-mode");
+  const selBeepWave = document.getElementById("setting-timer-beep-wave");
+  const inpBeepFreq = document.getElementById("setting-timer-beep-freq");
+  const inpBeepDur = document.getElementById("setting-timer-beep-dur");
+  const inpBeepVol = document.getElementById("setting-timer-beep-vol");
+  const inpBeepPeriod = document.getElementById("setting-timer-beep-period");
 
   // キーワードハイライト適用
   function applyKeywordHighlights(options) {
@@ -454,6 +475,22 @@ document.addEventListener("DOMContentLoaded", () => {
         if (chkSnapOrth) chkSnapOrth.checked = s.snapOrth !== false; // default true
         if (inpHl) inpHl.value = s.highlightKeywords || "";
         if (chkHlCase) chkHlCase.checked = !!s.highlightCaseSensitive;
+        if (selColMode) selColMode.value = s.colWidthMode || "fit";
+        if (inpColFixed)
+          inpColFixed.value =
+            typeof s.colFixedWidth === "number" && s.colFixedWidth > 0
+              ? String(s.colFixedWidth)
+              : "";
+        if (rowColFixed)
+          rowColFixed.style.display =
+            (s.colWidthMode || "fit") === "fixed" ? "flex" : "none";
+        if (selBeepMode) selBeepMode.value = s.timerBeepMode || "repeat";
+        if (selBeepWave) selBeepWave.value = s.timerBeepWave || "sine";
+        if (inpBeepFreq) inpBeepFreq.value = s.timerBeepFreq || "880";
+        if (inpBeepDur) inpBeepDur.value = s.timerBeepDur || "400";
+        if (inpBeepVol)
+          inpBeepVol.value = Math.round((s.timerBeepVol ?? 0.2) * 100);
+        if (inpBeepPeriod) inpBeepPeriod.value = s.timerBeepPeriod || "650";
       } else {
         selFont.value = "default";
         selLine.value = "default";
@@ -461,6 +498,15 @@ document.addEventListener("DOMContentLoaded", () => {
         if (chkSnapOrth) chkSnapOrth.checked = true;
         if (inpHl) inpHl.value = "";
         if (chkHlCase) chkHlCase.checked = false;
+        if (selColMode) selColMode.value = "fit";
+        if (inpColFixed) inpColFixed.value = "";
+        if (rowColFixed) rowColFixed.style.display = "none";
+        if (selBeepMode) selBeepMode.value = "repeat";
+        if (selBeepWave) selBeepWave.value = "sine";
+        if (inpBeepFreq) inpBeepFreq.value = "880";
+        if (inpBeepDur) inpBeepDur.value = "400";
+        if (inpBeepVol) inpBeepVol.value = 20;
+        if (inpBeepPeriod) inpBeepPeriod.value = "650";
       }
     } catch {
       selFont.value = "default";
@@ -469,6 +515,15 @@ document.addEventListener("DOMContentLoaded", () => {
       if (chkSnapOrth) chkSnapOrth.checked = true;
       if (inpHl) inpHl.value = "";
       if (chkHlCase) chkHlCase.checked = false;
+      if (selColMode) selColMode.value = "fit";
+      if (inpColFixed) inpColFixed.value = "";
+      if (rowColFixed) rowColFixed.style.display = "none";
+      if (selBeepMode) selBeepMode.value = "repeat";
+      if (selBeepWave) selBeepWave.value = "sine";
+      if (inpBeepFreq) inpBeepFreq.value = "880";
+      if (inpBeepDur) inpBeepDur.value = "400";
+      if (inpBeepVol) inpBeepVol.value = 20;
+      if (inpBeepPeriod) inpBeepPeriod.value = "650";
     }
   }
   function closeSettings() {
@@ -482,6 +537,39 @@ document.addEventListener("DOMContentLoaded", () => {
     const snapOrth = chkSnapOrth ? !!chkSnapOrth.checked : true;
     const hlKeywords = inpHl ? (inpHl.value || "").trim() : "";
     const hlCase = chkHlCase ? !!chkHlCase.checked : false;
+    const colMode = selColMode ? selColMode.value : "fit";
+    const colFixed = inpColFixed
+      ? Math.max(
+          160,
+          Math.min(800, parseInt(inpColFixed.value || "0", 10) || 0)
+        )
+      : 0;
+    const timerBeepMode = selBeepMode ? selBeepMode.value : "repeat";
+    const timerBeepWave = selBeepWave ? selBeepWave.value : "sine";
+    const timerBeepFreq = inpBeepFreq
+      ? Math.min(
+          3000,
+          Math.max(100, parseInt(inpBeepFreq.value || "880", 10) || 880)
+        )
+      : 880;
+    const timerBeepDur = inpBeepDur
+      ? Math.min(
+          3000,
+          Math.max(100, parseInt(inpBeepDur.value || "400", 10) || 400)
+        )
+      : 400;
+    const timerBeepVol = inpBeepVol
+      ? Math.min(
+          1,
+          Math.max(0, (parseInt(inpBeepVol.value || "20", 10) || 20) / 100)
+        )
+      : 0.2;
+    const timerBeepPeriod = inpBeepPeriod
+      ? Math.min(
+          5000,
+          Math.max(200, parseInt(inpBeepPeriod.value || "650", 10) || 650)
+        )
+      : 650;
     document.querySelectorAll(".flow-block-text").forEach((el) => {
       if (fontChoice === "xlarge") el.style.fontSize = "18px";
       else if (fontChoice === "large") el.style.fontSize = "16px";
@@ -500,15 +588,84 @@ document.addEventListener("DOMContentLoaded", () => {
       snapOrth,
       highlightKeywords: hlKeywords,
       highlightCaseSensitive: hlCase,
+      colWidthMode: colMode,
+      colFixedWidth: colFixed || undefined,
+      timerBeepMode,
+      timerBeepWave,
+      timerBeepFreq,
+      timerBeepDur,
+      timerBeepVol,
+      timerBeepPeriod,
     };
     localStorage.setItem(SETTINGS_KEY, JSON.stringify(next));
     applyTheme(themeChoice);
     applyKeywordHighlights();
+    applyColumnWidthSettings(next);
     // 矢印再描画（描画方式が変わるため）
     try {
       const data = JSON.parse(localStorage.getItem(STORAGE_KEY) || "null");
       if (data && data.connections) restoreConnections(data.connections);
     } catch {}
+  }
+
+  // カラム幅設定の適用
+  function applyColumnWidthSettings(s) {
+    try {
+      s = s || JSON.parse(localStorage.getItem(SETTINGS_KEY) || "null") || {};
+    } catch {
+      s = {};
+    }
+    const mode = s.colWidthMode || "fit";
+    const fixed =
+      typeof s.colFixedWidth === "number" && s.colFixedWidth > 0
+        ? s.colFixedWidth
+        : 0;
+    document.querySelectorAll(".flow-section").forEach((sec) => {
+      const scroll = sec.querySelector(".flow-scroll");
+      const cols = sec.querySelector(".flow-columns");
+      if (!cols) return;
+      cols.classList.toggle("fixed", mode === "fixed");
+      cols.classList.toggle("fit", mode !== "fixed");
+      if (mode === "fixed") {
+        cols.style.setProperty("--col-fixed-width", (fixed || 300) + "px");
+        cols.querySelectorAll(".flow-col").forEach((c) => {
+          c.setAttribute("data-fixed-width", "");
+        });
+      } else {
+        cols.style.removeProperty("--col-fixed-width");
+        cols.querySelectorAll(".flow-col").forEach((c) => {
+          c.removeAttribute("data-fixed-width");
+        });
+      }
+      // スクロールで矢印再描画
+      if (scroll && !scroll._fsScrollHooked) {
+        scroll.addEventListener("scroll", scheduleRepaint, { passive: true });
+        scroll._fsScrollHooked = true;
+      }
+      if (scroll) hookScrollUX(scroll);
+    });
+  }
+
+  // スクロールUX（Shift+ホイールで横スクロール）
+  function hookScrollUX(el) {
+    if (!el || el._fsWheelHooked) return;
+    el.addEventListener(
+      "wheel",
+      (e) => {
+        // Shiftキーでホイールを横スクロールに割り当て
+        if (!e.shiftKey) return;
+        // 既定のスクロールを無効化して水平に流す
+        e.preventDefault();
+        const delta =
+          Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
+        el.scrollLeft += delta;
+        try {
+          scheduleRepaint();
+        } catch {}
+      },
+      { passive: false }
+    );
+    el._fsWheelHooked = true;
   }
   openBtn && openBtn.addEventListener("click", openSettings);
   closeBtn && closeBtn.addEventListener("click", closeSettings);
@@ -522,6 +679,13 @@ document.addEventListener("DOMContentLoaded", () => {
       closeSettings();
       saveAll();
     });
+  // 設定UI内の依存項目の表示切り替え
+  if (selColMode && rowColFixed) {
+    selColMode.addEventListener("change", () => {
+      rowColFixed.style.display =
+        selColMode.value === "fixed" ? "flex" : "none";
+    });
+  }
   // --- ガイドモーダル ---
   (function setupGuide() {
     const gOverlay = document.getElementById("guide-overlay");
@@ -772,6 +936,114 @@ document.addEventListener("DOMContentLoaded", () => {
         scheduleRepaint();
       } catch {}
       return;
+    }
+    // Ctrl+Backspace で前ブロックに統合（キャレットが先頭付近のとき）
+    if (isFlowText && e.ctrlKey && e.key === "Backspace") {
+      const el = e.target;
+      // キャレットが先頭かどうかを簡易判定
+      const sel = window.getSelection();
+      if (sel && sel.anchorNode && el.contains(sel.anchorNode)) {
+        const range = sel.getRangeAt(0);
+        const preRange = range.cloneRange();
+        preRange.selectNodeContents(el);
+        preRange.setEnd(range.startContainer, range.startOffset);
+        const beforeLen = preRange.toString().length;
+        if (beforeLen === 0) {
+          const currentBlock = el.closest(".flow-block");
+          const prev = currentBlock && currentBlock.previousElementSibling;
+          if (prev && prev.classList.contains("flow-block")) {
+            e.preventDefault();
+            // 内容を結合（前の末尾に現在の内容を追加）
+            const prevText = prev.querySelector(".flow-block-text");
+            const curHtml = el.innerHTML;
+            // 末尾に改行を入れず、スペースで緩く結合
+            const spacer = prevText.innerHTML && curHtml ? " " : "";
+            prevText.innerHTML = prevText.innerHTML + spacer + curHtml;
+            // 接続: currentBlock 宛の矢印のfrom/to調整は簡易に削除（安全優先）
+            try {
+              const section = currentBlock.closest(".flow-section");
+              const layer =
+                section && section.querySelector(".arrow-svg-layer");
+              const bid = currentBlock.dataset.blockId;
+              if (layer && bid) {
+                layer
+                  .querySelectorAll(
+                    `svg[data-from="${bid}"], svg[data-to="${bid}"]`
+                  )
+                  .forEach((s) => s.remove());
+              }
+            } catch {}
+            // 現ブロックを削除
+            const parent = currentBlock.parentElement;
+            currentBlock.remove();
+            // フォーカスを前ブロック末尾へ
+            prevText.focus();
+            const r = document.createRange();
+            r.selectNodeContents(prevText);
+            r.collapse(false);
+            const s = window.getSelection();
+            s.removeAllRanges();
+            s.addRange(r);
+            saveAll();
+            persistConnections();
+            try {
+              scheduleRepaint();
+            } catch {}
+            return;
+          }
+        }
+      }
+    }
+    // Ctrl+Delete で次ブロックと統合（キャレットが末尾付近のとき）
+    if (isFlowText && e.ctrlKey && e.key === "Delete") {
+      const el = e.target;
+      const sel = window.getSelection();
+      if (sel && sel.anchorNode && el.contains(sel.anchorNode)) {
+        const range = sel.getRangeAt(0);
+        const postRange = range.cloneRange();
+        postRange.selectNodeContents(el);
+        postRange.setStart(range.endContainer, range.endOffset);
+        const afterLen = postRange.toString().length;
+        if (afterLen === 0) {
+          const currentBlock = el.closest(".flow-block");
+          const next = currentBlock && currentBlock.nextElementSibling;
+          if (next && next.classList.contains("flow-block")) {
+            e.preventDefault();
+            const nextText = next.querySelector(".flow-block-text");
+            const curText = el;
+            const spacer = curText.innerHTML && nextText.innerHTML ? " " : "";
+            curText.innerHTML = curText.innerHTML + spacer + nextText.innerHTML;
+            // 次ブロックの接続を簡易に削除
+            try {
+              const section = next.closest(".flow-section");
+              const layer =
+                section && section.querySelector(".arrow-svg-layer");
+              const bid = next.dataset.blockId;
+              if (layer && bid) {
+                layer
+                  .querySelectorAll(
+                    `svg[data-from="${bid}"], svg[data-to="${bid}"]`
+                  )
+                  .forEach((s) => s.remove());
+              }
+            } catch {}
+            next.remove();
+            // フォーカスは結合後の末尾
+            const r = document.createRange();
+            r.selectNodeContents(curText);
+            r.collapse(false);
+            const s = window.getSelection();
+            s.removeAllRanges();
+            s.addRange(r);
+            saveAll();
+            persistConnections();
+            try {
+              scheduleRepaint();
+            } catch {}
+            return;
+          }
+        }
+      }
     }
     // Alt+Enter で右のロールに新規ブロック＋接続
     if (e.altKey && e.key === "Enter" && isFlowText) {
@@ -1525,6 +1797,7 @@ document.addEventListener("DOMContentLoaded", () => {
     negFlow.style.display = "none";
     // 表示変更後に再描画
     setTimeout(() => {
+      applyColumnWidthSettings();
       const data = JSON.parse(localStorage.getItem(STORAGE_KEY) || "null");
       if (data && data.connections) restoreConnections(data.connections);
     }, 0);
@@ -1536,6 +1809,7 @@ document.addEventListener("DOMContentLoaded", () => {
     negFlow.style.display = "";
     // 表示変更後に再描画
     setTimeout(() => {
+      applyColumnWidthSettings();
       const data = JSON.parse(localStorage.getItem(STORAGE_KEY) || "null");
       if (data && data.connections) restoreConnections(data.connections);
     }, 0);
@@ -1658,6 +1932,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const elDisp = document.getElementById("timer-display");
     const btnStart = document.getElementById("timer-start");
     const btnReset = document.getElementById("timer-reset");
+    const btnBeepTest = document.getElementById("timer-beep-test");
     const selPreset = document.getElementById("timer-preset");
     const chkDown = document.getElementById("timer-countdown");
     if (!elDisp || !btnStart || !btnReset || !selPreset || !chkDown) return;
@@ -1667,6 +1942,124 @@ document.addEventListener("DOMContentLoaded", () => {
     let acc = 0; // 累積ミリ秒
     let raf = 0;
     let target = parseInt(selPreset.value, 10) || 300000;
+    let deadlineTimerId = null; // バックグラウンドでも鳴らすための締切タイマー
+    let beepedThisCycle = false; // このサイクルで既にビープ済みか
+
+    // 終了時ビープ（Web Audio API）
+    let audioCtx = null;
+    let activeBeepTimeouts = [];
+    let activeBeepInterval = null;
+    function isBeeping() {
+      return (
+        !!activeBeepInterval ||
+        (activeBeepTimeouts && activeBeepTimeouts.length > 0)
+      );
+    }
+    function stopAllBeeps() {
+      try {
+        activeBeepTimeouts.forEach((id) => clearTimeout(id));
+      } catch {}
+      activeBeepTimeouts = [];
+      try {
+        if (activeBeepInterval) {
+          clearInterval(activeBeepInterval);
+          activeBeepInterval = null;
+        }
+      } catch {}
+      try {
+        if (audioCtx && audioCtx.state !== "closed") {
+          // 直接発音中のノードを止める仕組みは個別管理が必要だが、
+          // ここではコンテキストを一時停止→再開で実質ミュート解除とする
+          audioCtx
+            .suspend()
+            .then(() => audioCtx.resume())
+            .catch(() => {});
+        }
+      } catch {}
+    }
+    function ensureAudioCtx() {
+      try {
+        const Ctx = window.AudioContext || window.webkitAudioContext;
+        if (!Ctx) return;
+        if (!audioCtx) audioCtx = new Ctx();
+        if (audioCtx.state === "suspended") audioCtx.resume().catch(() => {});
+      } catch {}
+    }
+    function playBeepOnce() {
+      try {
+        ensureAudioCtx();
+        if (!audioCtx) return;
+        const ctx = audioCtx;
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        const s =
+          JSON.parse(localStorage.getItem(SETTINGS_KEY) || "null") || {};
+        const wave = s.timerBeepWave || "sine";
+        const freq =
+          typeof s.timerBeepFreq === "number" ? s.timerBeepFreq : 880;
+        const durMs = typeof s.timerBeepDur === "number" ? s.timerBeepDur : 400;
+        const vol = typeof s.timerBeepVol === "number" ? s.timerBeepVol : 0.2;
+        // 音色/周波数
+        osc.type = wave;
+        osc.frequency.setValueAtTime(freq, ctx.currentTime);
+        const now = ctx.currentTime;
+        // エンベロープ（柔らかい立ち上がりと短い減衰）
+        gain.gain.setValueAtTime(0.0001, now);
+        gain.gain.exponentialRampToValueAtTime(vol, now + 0.01);
+        const release = Math.max(0.05, Math.min(0.9, (durMs / 1000) * 0.85));
+        gain.gain.exponentialRampToValueAtTime(0.0001, now + release);
+        osc.connect(gain).connect(ctx.destination);
+        osc.start(now);
+        osc.stop(now + Math.max(0.05, durMs / 1000));
+      } catch {}
+    }
+    function playBeep() {
+      const s = JSON.parse(localStorage.getItem(SETTINGS_KEY) || "null") || {};
+      const mode = s.timerBeepMode || "repeat"; // repeat | single | off
+      if (mode === "off") return;
+      stopAllBeeps();
+      if (mode === "single") {
+        playBeepOnce();
+        return;
+      }
+      // repeat: 無限ループで短いビープを鳴らし続ける（ユーザー操作で停止）
+      playBeepOnce();
+      const s2 = JSON.parse(localStorage.getItem(SETTINGS_KEY) || "null") || {};
+      const period =
+        typeof s2.timerBeepPeriod === "number" ? s2.timerBeepPeriod : 650; // ms
+      activeBeepInterval = setInterval(() => {
+        playBeepOnce();
+      }, period);
+    }
+
+    function clearDeadlineTimer() {
+      if (deadlineTimerId) {
+        clearTimeout(deadlineTimerId);
+        deadlineTimerId = null;
+      }
+    }
+    function scheduleDeadlineIfNeeded() {
+      clearDeadlineTimer();
+      if (!running || !chkDown.checked) return;
+      const now = performance.now();
+      const elapsed = acc + (now - startTs);
+      const remain = target - elapsed;
+      if (remain > 0) {
+        deadlineTimerId = setTimeout(() => {
+          // 締切に到達。二重発火防止しつつ確定処理
+          running = false;
+          acc = target;
+          btnStart.textContent = "▶";
+          if (!beepedThisCycle) {
+            try {
+              playBeep();
+            } catch {}
+            beepedThisCycle = true;
+          }
+          render();
+        }, Math.max(0, Math.ceil(remain)));
+      }
+    }
 
     function fmt(ms) {
       ms = Math.max(0, Math.floor(ms));
@@ -1681,15 +2074,18 @@ document.addEventListener("DOMContentLoaded", () => {
       const displayMs = chkDown.checked ? target - elapsed : elapsed;
       elDisp.textContent = fmt(displayMs);
       if (running) {
+        // 終了ビープ（設定に応じて single / repeat / off）
         if (chkDown.checked && displayMs <= 0) {
           // タイムアップ
           running = false;
           acc = target; // ちょうどに揃える
           btnStart.textContent = "▶";
-          // 簡易通知
-          try {
-            new AudioContext();
-          } catch {}
+          if (!beepedThisCycle) {
+            try {
+              playBeep();
+            } catch {}
+            beepedThisCycle = true;
+          }
           return; // 止める
         }
         raf = requestAnimationFrame(render);
@@ -1697,30 +2093,66 @@ document.addEventListener("DOMContentLoaded", () => {
     }
     function startStop() {
       if (!running) {
+        // 最初にユーザー操作でオーディオを解錠しておく
+        stopAllBeeps();
+        ensureAudioCtx();
         running = true;
         startTs = performance.now();
         btnStart.textContent = "⏸";
+        beepedThisCycle = false;
+        scheduleDeadlineIfNeeded();
         raf = requestAnimationFrame(render);
       } else {
+        stopAllBeeps();
         running = false;
         acc = acc + (performance.now() - startTs);
         btnStart.textContent = "▶";
+        clearDeadlineTimer();
       }
     }
     function reset() {
       running = false;
       acc = 0;
       startTs = 0;
+      stopAllBeeps();
+      beepedThisCycle = false;
+      clearDeadlineTimer();
       btnStart.textContent = "▶";
       render();
     }
     btnStart.addEventListener("click", startStop);
     btnReset.addEventListener("click", reset);
+    if (btnBeepTest) {
+      btnBeepTest.addEventListener("click", () => {
+        // テストはトグル: repeat設定時は押すたびに開始/停止
+        ensureAudioCtx();
+        const s =
+          JSON.parse(localStorage.getItem(SETTINGS_KEY) || "null") || {};
+        const mode = s.timerBeepMode || "repeat";
+        if (mode === "repeat") {
+          if (isBeeping()) {
+            stopAllBeeps();
+            return;
+          }
+          stopAllBeeps();
+          playBeep();
+        } else if (mode === "single") {
+          stopAllBeeps();
+          playBeep();
+        } // off は何もしない
+      });
+    }
     selPreset.addEventListener("change", () => {
+      stopAllBeeps();
       target = parseInt(selPreset.value, 10) || 300000;
+      beepedThisCycle = false;
+      if (running) scheduleDeadlineIfNeeded();
       if (chkDown.checked && !running) render();
     });
     chkDown.addEventListener("change", () => {
+      stopAllBeeps();
+      beepedThisCycle = false;
+      if (running) scheduleDeadlineIfNeeded();
       // 表示ロジックだけ切替（内部accは共通）
       render();
     });
@@ -1873,6 +2305,12 @@ document.addEventListener("DOMContentLoaded", () => {
     const fontSizes = new Set(["", "large", "xlarge"]);
     const lineHeights = new Set(["", "relaxed", "loose"]);
     const themes = new Set(["system", "light", "dark"]);
+    const colModes = new Set(["fit", "fixed"]);
+    let colFixed = 0;
+    if (typeof rawSettings.colFixedWidth === "number") {
+      const n = Math.floor(rawSettings.colFixedWidth);
+      if (isFinite(n)) colFixed = Math.max(0, Math.min(2000, n));
+    }
     out.settings = {
       fontSize: fontSizes.has(rawSettings.fontSize) ? rawSettings.fontSize : "",
       lineHeight: lineHeights.has(rawSettings.lineHeight)
@@ -1883,6 +2321,19 @@ document.addEventListener("DOMContentLoaded", () => {
         : rawSettings.theme
         ? "system"
         : "system",
+      snapOrth:
+        typeof rawSettings.snapOrth === "boolean"
+          ? rawSettings.snapOrth
+          : undefined,
+      highlightKeywords:
+        typeof rawSettings.highlightKeywords === "string"
+          ? rawSettings.highlightKeywords.slice(0, 500)
+          : undefined,
+      highlightCaseSensitive: !!rawSettings.highlightCaseSensitive,
+      colWidthMode: colModes.has(rawSettings.colWidthMode)
+        ? rawSettings.colWidthMode
+        : undefined,
+      colFixedWidth: colFixed || undefined,
     };
     return out;
   }
@@ -2058,7 +2509,12 @@ document.addEventListener("DOMContentLoaded", () => {
     store.connections = conns;
     localStorage.setItem(STORAGE_KEY, JSON.stringify(store));
     // 少し後で描画（DOM反映後）
-    setTimeout(() => restoreConnections(conns), 0);
+    setTimeout(() => {
+      try {
+        applyColumnWidthSettings();
+      } catch {}
+      restoreConnections(conns);
+    }, 0);
     // 最後に全体保存
     saveAll();
     // キーワードハイライト再適用

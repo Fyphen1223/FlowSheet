@@ -489,6 +489,11 @@ header h1 {
   padding: 0 2vw;
   position: relative; /* 矢印レイヤーの基準 */
 }
+.flow-section .flow-scroll {
+  width: 100%;
+  overflow-x: auto;
+  overflow-y: visible;
+}
 .arrow-svg-layer {
   position: absolute;
   inset: 0;
@@ -518,6 +523,15 @@ header h1 {
   justify-content: space-between;
   width: 100%;
 }
+.flow-columns.fit {
+  justify-content: space-between;
+  width: 100%;
+}
+.flow-columns.fixed {
+  justify-content: flex-end; /* row-reverse で右寄せに見える */
+  width: max-content;
+  min-width: 100%;
+}
 .flow-col {
   background: #e9f0fb;
   border-radius: 0 !important;
@@ -529,6 +543,14 @@ header h1 {
   flex-direction: column;
   align-items: stretch;
   padding: 0 0 12px 0;
+}
+.flow-columns.fixed .flow-col {
+  flex: 0 0 auto;
+}
+.flow-columns.fixed .flow-col[data-fixed-width] {
+  width: var(--col-fixed-width, 300px);
+  min-width: var(--col-fixed-width, 300px);
+  max-width: var(--col-fixed-width, 300px);
 }
 .col-title {
   background: #3b5998;
@@ -589,12 +611,12 @@ header h1 {
   opacity: 0.8;
 }
 @media (max-width: 900px) {
-  .flow-columns {
+  .flow-columns:not(.fixed) {
     flex-direction: column-reverse;
     gap: 8px;
     width: 100%;
   }
-  .flow-col {
+  .flow-columns:not(.fixed) .flow-col {
     max-width: 100%;
     min-width: 0;
   }

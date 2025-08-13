@@ -57,6 +57,45 @@
   background: #dbe6fa;
 }
 
+/* お問い合わせメール（右上固定・テーマの左） */
+.contact-chip {
+  position: fixed;
+  top: 10px;
+  right: 136px; /* theme 94px, help 52px, settings 12px -> 左側に配置 */
+  max-width: 38vw;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 36px;
+  padding: 0 10px;
+  background: #e9f0fb;
+  border: 1.5px solid #b0c4de;
+  border-radius: 18px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.contact-chip:hover {
+  background: #dbe6fa;
+}
+.contact-chip .label {
+  color: var(--primary);
+  font-size: 13px;
+}
+@media (max-width: 640px) {
+  .contact-chip {
+    max-width: 52vw;
+    right: 136px;
+  }
+  .contact-chip .label {
+    max-width: 40vw;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+}
+
 /* モーダル */
 .settings-overlay {
   position: fixed;
@@ -791,19 +830,22 @@ header h1 {
 }
 .settings-btn,
 .help-btn,
-.theme-btn {
+.theme-btn,
+.contact-chip {
   background: var(--primary-weak-2);
   border-color: var(--muted);
   box-shadow: 0 1px 3px var(--shadow);
 }
 .settings-btn:hover,
 .help-btn:hover,
-.theme-btn:hover {
+.theme-btn:hover,
+.contact-chip:hover {
   background: var(--primary-weak-hover);
 }
 .settings-btn svg path,
 .help-btn svg path,
-.theme-btn svg path {
+.theme-btn svg path,
+.contact-chip svg path {
   fill: var(--primary);
 }
 .drag-connect-btn svg circle {

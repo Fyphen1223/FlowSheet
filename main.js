@@ -3095,6 +3095,49 @@ document.addEventListener("DOMContentLoaded", () => {
     if (y) y.textContent = String(new Date().getFullYear());
   })();
 
+  // お問い合わせメール: クリックでコピー
+  (function setupContactChip() {
+    const btn = document.getElementById("open-contact-chip");
+    if (!btn) return;
+    // JSで組み立て（簡易ボット対策）
+    const local = "fyphensub";
+    const domain = "gmail" + ".com"; // 分割でスクレイピング回避の一助
+    const addr = local + "@" + domain;
+    // 表示ラベルを念のため上書き（HTMLの静的文字と一致）
+    const label = btn.querySelector(".label");
+    if (label) label.textContent = addr;
+    btn.addEventListener("click", async () => {
+      let ok = false;
+      if (window.isSecureContext && navigator.clipboard?.writeText) {
+        try {
+          await navigator.clipboard.writeText(addr);
+          ok = true;
+        } catch {}
+      }
+      if (!ok) {
+        try {
+          const ta = document.createElement("textarea");
+          ta.value = addr;
+          ta.setAttribute("readonly", "");
+          ta.style.position = "fixed";
+          ta.style.top = "-1000px";
+          document.body.appendChild(ta);
+          ta.select();
+          ok = document.execCommand("copy");
+          document.body.removeChild(ta);
+        } catch {}
+      }
+      // フィードバック
+      const prev = label ? label.textContent : "";
+      if (label) label.textContent = ok ? "コピーしました" : addr;
+      btn.disabled = true;
+      setTimeout(() => {
+        if (label) label.textContent = prev || addr;
+        btn.disabled = false;
+      }, 1200);
+    });
+  })();
+
   // ===== 検索 =====
   (function setupSearch() {
     const inp = document.getElementById("search-query");
